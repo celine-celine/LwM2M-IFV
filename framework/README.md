@@ -2,9 +2,9 @@
 
 This directory is a non-invasive scaffold around the UPPAAL models in
 `../LwM2M Models/`. It contains profile entry points, generated framework
-models, query catalogs, and protocol-audit notes for the revised manuscript.
+models, query catalogs, and protocol-audit notes for the LwM2M-IFV toolchain.
 
-The framework follows the current three-layer paper structure:
+The framework follows a three-layer structure:
 
 1. **Protocol Core Layer**: reusable lifecycle behavior for Bootstrap,
    Registration, Registration Update, Deregister/offline cleanup, and
@@ -15,8 +15,8 @@ The framework follows the current three-layer paper structure:
    authorization, cloned-device rejection, stale-session cleanup, and telemetry
    freshness.
 
-Use `../FRAMEWORK_REFACTOR_PLAN.md` as the master manuscript revision plan.
-This README is only the framework entry point.
+This README is the framework entry point. The root `README.md` documents the
+LLM-assisted profile assistant.
 
 ## Profile Commands
 
@@ -83,4 +83,4 @@ Evidence:
 
 The current industrial model introduces a lightweight `PolicyMonitor` automaton
 that maps lifecycle/profile evidence to operational decisions. It is the main
-model evidence for the Industrial Scenario Layer in the revised paper.
+model evidence for the Industrial Scenario Layer.

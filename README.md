@@ -1,6 +1,6 @@
 # LwM2M-IFV UPPAAL Framework
 
-This repository contains an UPPAAL-based framework and manuscript workspace for modeling and verifying LwM2M behavior in industrial IoT scenarios.
+This repository contains an UPPAAL-based framework for modeling and verifying LwM2M behavior in industrial IoT scenarios.
 
 The current prototype includes a small assistant tool that maps natural-language shop-floor requirements to bounded profile templates, validates the generated configuration against a local catalog, and runs UPPAAL `verifyta` queries to produce formal evidence.
 
@@ -20,7 +20,6 @@ tools/
   run_framework_profile.ps1
 
 LwM2M Models/       Original and layered UPPAAL model files
-figs/               Manuscript figures
 ```
 
 Generated LLM drafts and verification reports are ignored by git:
@@ -141,4 +140,3 @@ foreach ($name in $configs) {
     -Run
 }
 ```
-
