@@ -120,6 +120,87 @@ function Get-PropertyValue {
     return $property.Value
 }
 
+function ConvertTo-NullableDouble {
+    param([string]$Value)
+    if ($null -eq $Value -or $Value -eq "") {
+        return $null
+    }
+    return [double]::Parse($Value, [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-SmcResult {
+    param([Parameter(Mandatory = $true)][string]$OutputText)
+
+    $cleanText = $OutputText -replace "`e\[[0-9;]*[A-Za-z]", ""
+    $lines = @($cleanText -split "`r?`n")
+
+    $result = [ordered]@{}
+
+    foreach ($line in $lines) {
+        $trimmed = $line.Trim()
+
+        $probabilityMatch = [regex]::Match($trimmed, '^\((\d+)\/(\d+)\s+runs\)\s+Pr\([^)]+\)\s+in\s+\[([0-9.eE+-]+),([0-9.eE+-]+)\]\s+\((\d+(?:\.\d+)?)%\s+CI\)')
+        if ($probabilityMatch.Success) {
+            $result.type = "probability_interval"
+            $result.success_runs = [int]$probabilityMatch.Groups[1].Value
+            $result.runs = [int]$probabilityMatch.Groups[2].Value
+            $result.lower = ConvertTo-NullableDouble $probabilityMatch.Groups[3].Value
+            $result.upper = ConvertTo-NullableDouble $probabilityMatch.Groups[4].Value
+            $result.confidence = (ConvertTo-NullableDouble $probabilityMatch.Groups[5].Value) / 100.0
+            continue
+        }
+
+        $thresholdMatch = [regex]::Match($trimmed, '^\((\d+)\/(\d+)\s+runs\)')
+        if ($thresholdMatch.Success -and -not $result.type) {
+            $result.type = "run_ratio"
+            $result.success_runs = [int]$thresholdMatch.Groups[1].Value
+            $result.runs = [int]$thresholdMatch.Groups[2].Value
+            continue
+        }
+
+        $expectationMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+([0-9.eE+-]+)\s+(?:±|\+/-)\s+([0-9.eE+-]+)\s+\((\d+(?:\.\d+)?)%\s+CI\)')
+        if ($expectationMatch.Success) {
+            $result.type = "expectation"
+            $result.runs = [int]$expectationMatch.Groups[1].Value
+            $result.estimator = $expectationMatch.Groups[2].Value
+            $result.mean = ConvertTo-NullableDouble $expectationMatch.Groups[3].Value
+            $result.error = ConvertTo-NullableDouble $expectationMatch.Groups[4].Value
+            $result.confidence = (ConvertTo-NullableDouble $expectationMatch.Groups[5].Value) / 100.0
+            continue
+        }
+
+        $nearZeroMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+≈\s+0')
+        if ($nearZeroMatch.Success) {
+            $result.type = "expectation"
+            $result.runs = [int]$nearZeroMatch.Groups[1].Value
+            $result.estimator = $nearZeroMatch.Groups[2].Value
+            $result.mean = 0.0
+            $result.approximate = $true
+            continue
+        }
+
+        $valuesMatch = [regex]::Match($trimmed, '^Values\s+in\s+\[([0-9.eE+-]+),([0-9.eE+-]+)\]\s+mean=([0-9.eE+-]+)\s+steps=([0-9.eE+-]+)')
+        if ($valuesMatch.Success) {
+            $result.value_min = ConvertTo-NullableDouble $valuesMatch.Groups[1].Value
+            $result.value_max = ConvertTo-NullableDouble $valuesMatch.Groups[2].Value
+            $result.value_mean = ConvertTo-NullableDouble $valuesMatch.Groups[3].Value
+            $result.value_steps = ConvertTo-NullableDouble $valuesMatch.Groups[4].Value
+            continue
+        }
+    }
+
+    if ($result.Count -eq 0) {
+        return $null
+    }
+
+    if (-not $result.Contains("type") -and $result.Contains("value_mean")) {
+        $result.type = "expectation"
+        $result.mean = $result.value_mean
+    }
+
+    return [pscustomobject]$result
+}
+
 function Get-ProfileInstances {
     param([Parameter(Mandatory = $true)]$Draft)
 
@@ -526,6 +607,7 @@ function Invoke-ProfileQuery {
     }
 
     $tail = @($outputLines | Select-Object -Last 12)
+    $smcResult = Get-SmcResult -OutputText $outputText
 
     return [pscustomobject][ordered]@{
         profile = $ProfileName
@@ -536,6 +618,7 @@ function Invoke-ProfileQuery {
         exit_code = $exitCode
         started_at = $started.ToString("o")
         finished_at = $finished.ToString("o")
+        smc = $smcResult
         output_tail = $tail
     }
 }
@@ -581,7 +664,25 @@ function Write-RunSummary {
     Write-Host ""
     Write-Host "Per-query results"
     foreach ($result in $Report.results) {
-        Write-Host ("  [{0}] {1} :: {2} (q{3})" -f $result.status, $result.profile, $result.query, $result.query_index)
+        $smcText = ""
+        if ($result.smc) {
+            if ($result.smc.type -eq "probability_interval") {
+                $smcText = " Pr in [{0},{1}] ({2}/{3} runs)" -f $result.smc.lower, $result.smc.upper, $result.smc.success_runs, $result.smc.runs
+            } elseif ($result.smc.type -eq "expectation") {
+                if ($null -ne $result.smc.error) {
+                    $smcText = " E={0} +/- {1} ({2} runs)" -f $result.smc.mean, $result.smc.error, $result.smc.runs
+                } else {
+                    if ($null -ne $result.smc.runs) {
+                        $smcText = " E~{0} ({1} runs)" -f $result.smc.mean, $result.smc.runs
+                    } else {
+                        $smcText = " E~{0}" -f $result.smc.mean
+                    }
+                }
+            } elseif ($result.smc.type -eq "run_ratio") {
+                $smcText = " {0}/{1} runs" -f $result.smc.success_runs, $result.smc.runs
+            }
+        }
+        Write-Host ("  [{0}] {1} :: {2} (q{3}){4}" -f $result.status, $result.profile, $result.query, $result.query_index, $smcText)
     }
 }
 

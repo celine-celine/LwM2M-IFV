@@ -107,6 +107,18 @@ The tool validates that:
 
 UPPAAL `verifyta` is the only source of SAT, NOT_SAT, and SMC evidence.
 
+For SMC profiles, the assistant extracts structured probability and expectation
+summaries from `verifyta` output when available. Terminal summaries may include
+items such as:
+
+```text
+Pr in [0.981725,1] (200/200 runs)
+E~0.005
+```
+
+The full JSON report keeps the raw output tail together with the parsed `smc`
+field for auditability.
+
 ## Regression Examples
 
 The current minimum regression set is:
