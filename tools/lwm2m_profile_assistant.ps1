@@ -128,6 +128,36 @@ function ConvertTo-NullableDouble {
     return [double]::Parse($Value, [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+function ConvertTo-BooleanValue {
+    param($Value)
+    if ($Value -is [bool]) {
+        return $Value
+    }
+    $stringValue = ([string]$Value).ToLowerInvariant()
+    if ($stringValue -eq "true") {
+        return $true
+    }
+    if ($stringValue -eq "false") {
+        return $false
+    }
+    throw "Expected boolean value, got '$Value'."
+}
+
+function ConvertTo-RepoRelativePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd("\")
+    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $fullPath.Substring($root.Length).TrimStart("\") -replace "\\", "/"
+    }
+    return $fullPath
+}
+
+function ConvertTo-SafeId {
+    param([Parameter(Mandatory = $true)][string]$Value)
+    return ($Value.ToLowerInvariant() -replace "[^a-z0-9]+", "_").Trim("_")
+}
+
 function Get-SmcResult {
     param([Parameter(Mandatory = $true)][string]$OutputText)
 
@@ -333,6 +363,299 @@ function Get-MergedQuerySets {
     return $merged
 }
 
+function Merge-ParameterObjects {
+    param([object[]]$Objects)
+
+    $merged = [ordered]@{}
+    foreach ($object in $Objects) {
+        if ($null -eq $object) {
+            continue
+        }
+        foreach ($property in $object.PSObject.Properties) {
+            $merged[$property.Name] = $property.Value
+        }
+    }
+    return [pscustomobject]$merged
+}
+
+function Get-ProfileParameters {
+    param(
+        [Parameter(Mandatory = $true)]$Draft,
+        [Parameter(Mandatory = $true)][string]$ProfileName
+    )
+
+    $objects = @()
+    if ($Draft.parameters) {
+        $objects += $Draft.parameters
+    }
+    foreach ($instance in (Get-ProfileInstances -Draft $Draft)) {
+        if ([string]$instance.profile -eq $ProfileName -and $instance.parameters) {
+            $objects += $instance.parameters
+        }
+    }
+    return Merge-ParameterObjects -Objects $objects
+}
+
+function Get-ParameterOrDefault {
+    param(
+        $Parameters,
+        [Parameter(Mandatory = $true)][string]$Name,
+        $Default
+    )
+
+    $value = Get-PropertyValue -Object $Parameters -Name $Name
+    if ($null -eq $value -or [string]$value -eq "") {
+        return $Default
+    }
+    return $value
+}
+
+function Test-TemplateParameters {
+    param(
+        [Parameter(Mandatory = $true)]$TemplateObject,
+        $Parameters
+    )
+
+    if (-not $Parameters -or -not $TemplateObject.parameters) {
+        return
+    }
+
+    foreach ($parameterProperty in $TemplateObject.parameters.PSObject.Properties) {
+        $name = [string]$parameterProperty.Name
+        $definition = $parameterProperty.Value
+        $value = Get-PropertyValue -Object $Parameters -Name $name
+        if ($null -eq $value) {
+            continue
+        }
+
+        $type = [string]$definition.type
+        if ($type -eq "enum") {
+            $stringValue = [string]$value
+            if (@($definition.values) -notcontains $stringValue) {
+                throw "Parameter '$name' has unsupported value '$stringValue'. Allowed values: $(@($definition.values) -join ', ')"
+            }
+        } elseif ($type -eq "boolean") {
+            if ($value -isnot [bool]) {
+                $stringValue = [string]$value
+                if ($stringValue -ne "true" -and $stringValue -ne "false") {
+                    throw "Parameter '$name' must be boolean."
+                }
+            }
+        } elseif ($type -eq "integer") {
+            $integerValue = [int]$value
+            $min = Get-PropertyValue -Object $definition -Name "min"
+            $max = Get-PropertyValue -Object $definition -Name "max"
+            if ($null -ne $min -and $integerValue -lt [int]$min) {
+                throw "Parameter '$name' must be >= $min."
+            }
+            if ($null -ne $max -and $integerValue -gt [int]$max) {
+                throw "Parameter '$name' must be <= $max."
+            }
+        }
+    }
+}
+
+function Set-UppaalConstant {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Type,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    $escapedName = [regex]::Escape($Name)
+    $pattern = "(?m)(const\s+$Type\s+$escapedName\s*=\s*)[^;]+;"
+    if (-not [regex]::IsMatch($Text, $pattern)) {
+        throw "Could not find UPPAAL constant '$Name' in generated model."
+    }
+    $replaced = [regex]::Replace($Text, $pattern, {
+        param($match)
+        return $match.Groups[1].Value + $Value + ";"
+    }, 1)
+
+    return $replaced
+}
+
+function Set-UppaalSmcTimeBound {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][int]$Bound
+    )
+
+    return [regex]::Replace($Text, '((?:Pr|E)\[&lt;=)\d+(;\s*200\])', {
+        param($match)
+        return $match.Groups[1].Value + $Bound + $match.Groups[2].Value
+    })
+}
+
+function New-ProfileConstantSet {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProfileName,
+        $Parameters
+    )
+
+    $constants = [ordered]@{}
+    $smcTimeBound = $null
+
+    if ($ProfileName -eq "observation-long-lived-reset-smc") {
+        $network = [string](Get-ParameterOrDefault -Parameters $Parameters -Name "network_loss_profile" -Default "shop_floor_lan_low_loss")
+        if ($network -eq "shop_floor_lan_low_loss") {
+            $constants.WEIGHT_NOTIFY_SUCCESS = 995
+            $constants.WEIGHT_NOTIFY_LOSS = 5
+            $constants.WEIGHT_ACK = 990
+            $constants.WEIGHT_RESET = 10
+            $constants.NOTIFICATION_RATE = "0.01"
+        } elseif ($network -eq "moderate_loss_wireless") {
+            $constants.WEIGHT_NOTIFY_SUCCESS = 970
+            $constants.WEIGHT_NOTIFY_LOSS = 30
+            $constants.WEIGHT_ACK = 960
+            $constants.WEIGHT_RESET = 20
+            $constants.NOTIFICATION_RATE = "0.01"
+        } elseif ($network -eq "remote_maintenance_high_latency") {
+            $constants.WEIGHT_NOTIFY_SUCCESS = 940
+            $constants.WEIGHT_NOTIFY_LOSS = 60
+            $constants.WEIGHT_ACK = 930
+            $constants.WEIGHT_RESET = 30
+            $constants.NOTIFICATION_RATE = "0.006"
+        } else {
+            throw "Unsupported network_loss_profile '$network' for $ProfileName."
+        }
+
+        $deadlineProfile = [string](Get-ParameterOrDefault -Parameters $Parameters -Name "freshness_deadline_profile" -Default "bounded_control_monitoring")
+        if ($deadlineProfile -eq "bounded_control_monitoring") {
+            $smcTimeBound = 210000
+        } elseif ($deadlineProfile -eq "strict_control_deadline") {
+            $smcTimeBound = 120000
+        } elseif ($deadlineProfile -eq "relaxed_monitoring_deadline") {
+            $smcTimeBound = 300000
+        } else {
+            throw "Unsupported freshness_deadline_profile '$deadlineProfile' for $ProfileName."
+        }
+        $constants.OBSERVATION_DEADLINE = $smcTimeBound
+
+        $resetEnabled = ConvertTo-BooleanValue -Value (Get-ParameterOrDefault -Parameters $Parameters -Name "observation_reset_enabled" -Default $true)
+        $constants.RESET_ENABLED = $resetEnabled.ToString().ToLowerInvariant()
+        if (-not $resetEnabled) {
+            $constants.WEIGHT_RESET = 0
+        }
+
+        $maxNotifications = Get-ParameterOrDefault -Parameters $Parameters -Name "max_notifications_per_observation" -Default $null
+        if ($null -ne $maxNotifications) {
+            $constants.MAX_NOTIFICATIONS_PER_OBSERVATION = [int]$maxNotifications
+        }
+    } elseif ($ProfileName -eq "bootstrap-smc" -or $ProfileName -eq "registration-smc") {
+        $network = [string](Get-ParameterOrDefault -Parameters $Parameters -Name "network_loss_profile" -Default "shop_floor_lan_low_loss")
+        if ($network -eq "shop_floor_lan_low_loss") {
+            $successWeight = 995
+            $lossWeight = 5
+            $ackTimeout = 2000
+        } elseif ($network -eq "moderate_loss_wireless") {
+            $successWeight = 970
+            $lossWeight = 30
+            $ackTimeout = 3000
+        } elseif ($network -eq "remote_maintenance_high_latency") {
+            $successWeight = 940
+            $lossWeight = 60
+            $ackTimeout = 5000
+        } else {
+            throw "Unsupported network_loss_profile '$network' for $ProfileName."
+        }
+
+        $deadlineProfile = [string](Get-ParameterOrDefault -Parameters $Parameters -Name "deadline_profile" -Default "standard_onboarding_deadline")
+        if ($deadlineProfile -eq "standard_onboarding_deadline") {
+            $smcTimeBound = 21000
+        } elseif ($deadlineProfile -eq "strict_onboarding_deadline") {
+            $smcTimeBound = 12000
+        } elseif ($deadlineProfile -eq "relaxed_remote_onboarding_deadline") {
+            $smcTimeBound = 45000
+        } else {
+            throw "Unsupported deadline_profile '$deadlineProfile' for $ProfileName."
+        }
+
+        $constants.ACK_TIMEOUT = [int](Get-ParameterOrDefault -Parameters $Parameters -Name "ack_timeout" -Default $ackTimeout)
+        $constants.MAX_RETRANSMIT = [int](Get-ParameterOrDefault -Parameters $Parameters -Name "max_retransmit" -Default 4)
+
+        if ($ProfileName -eq "bootstrap-smc") {
+            $constants.DTLS_HANDSHAKE_DELAY = [int](Get-ParameterOrDefault -Parameters $Parameters -Name "dtls_handshake_delay" -Default 100)
+            $constants.BOOTSTRAP_DEADLINE = $smcTimeBound
+            $constants.WEIGHT_CONFIG_SUCCESS = $successWeight
+            $constants.WEIGHT_CONFIG_LOSS = $lossWeight
+        } else {
+            $constants.DTLS_DELAY = [int](Get-ParameterOrDefault -Parameters $Parameters -Name "dtls_delay" -Default 50)
+            $constants.REGISTRATION_DEADLINE = $smcTimeBound
+            $constants.WEIGHT_REGISTER_SUCCESS = $successWeight
+            $constants.WEIGHT_REGISTER_LOSS = $lossWeight
+            $constants.WEIGHT_OBJECT_SUCCESS = $successWeight
+            $constants.WEIGHT_OBJECT_LOSS = $lossWeight
+        }
+    } else {
+        return $null
+    }
+
+    return [pscustomobject][ordered]@{
+        constants = [pscustomobject]$constants
+        smc_time_bound = $smcTimeBound
+    }
+}
+
+function New-ParameterizedModel {
+    param(
+        [Parameter(Mandatory = $true)]$Draft,
+        [Parameter(Mandatory = $true)][string]$ProfileName,
+        [Parameter(Mandatory = $true)]$ProfileObject
+    )
+
+    $parameters = Get-ProfileParameters -Draft $Draft -ProfileName $ProfileName
+    $constantSet = New-ProfileConstantSet -ProfileName $ProfileName -Parameters $parameters
+    if ($null -eq $constantSet) {
+        return $null
+    }
+
+    $sourceModelPath = Resolve-RepoPath ([string]$ProfileObject.model)
+    if (-not (Test-Path -LiteralPath $sourceModelPath)) {
+        throw "Model from profile '$ProfileName' was not found: $sourceModelPath"
+    }
+
+    $modelText = Get-Content -LiteralPath $sourceModelPath -Raw
+    foreach ($constant in $constantSet.constants.PSObject.Properties) {
+        $value = $constant.Value
+        $type = "int"
+        if ($value -is [bool] -or [string]$value -eq "true" -or [string]$value -eq "false") {
+            $type = "bool"
+        } elseif ([string]$value -match '\.') {
+            $type = "double"
+        }
+        $modelText = Set-UppaalConstant -Text $modelText -Type $type -Name $constant.Name -Value ([string]$value)
+    }
+
+    if ($null -ne $constantSet.smc_time_bound) {
+        $modelText = Set-UppaalSmcTimeBound -Text $modelText -Bound ([int]$constantSet.smc_time_bound)
+    }
+
+    $safeRequirementId = ConvertTo-SafeId -Value ([string]$Draft.requirement_id)
+    if (-not $safeRequirementId) {
+        $safeRequirementId = "draft"
+    }
+    $targetDir = Join-Path $repoRoot "framework\generated\parameterized\$safeRequirementId"
+    if (-not (Test-Path -LiteralPath $targetDir)) {
+        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+    }
+
+    $sourceName = [System.IO.Path]::GetFileNameWithoutExtension($sourceModelPath)
+    $targetPath = Join-Path $targetDir "$sourceName.$ProfileName.xml"
+    Set-Content -LiteralPath $targetPath -Value $modelText -Encoding UTF8
+
+    return [pscustomobject][ordered]@{
+        profile = $ProfileName
+        model = (ConvertTo-RepoRelativePath -Path $targetPath)
+        model_path = $targetPath
+        source_model = ([string]$ProfileObject.model)
+        parameters = $parameters
+        applied_constants = $constantSet.constants
+        smc_time_bound = $constantSet.smc_time_bound
+    }
+}
+
 function Get-RouteScore {
     param(
         [Parameter(Mandatory = $true)]$Route,
@@ -518,6 +841,9 @@ function Test-Draft {
                 throw "Draft references unknown profile template: $templateId"
             }
             $templateObject = $templateById[$templateId]
+            if ($instance.parameters) {
+                Test-TemplateParameters -TemplateObject $templateObject -Parameters $instance.parameters
+            }
 
             $candidateInstanceIntents = @()
             if ($instance.intent) {
@@ -560,6 +886,7 @@ function Invoke-ProfileQuery {
         [Parameter(Mandatory = $true)]$ProfileName,
         [Parameter(Mandatory = $true)]$QueryName,
         [Parameter(Mandatory = $true)]$ProfileObject,
+        [string]$ModelPathOverride,
         [string]$VerifytaPath
     )
 
@@ -569,7 +896,13 @@ function Invoke-ProfileQuery {
     }
 
     $queryIndex = [int]$queryIndexValue
-    $modelPath = Resolve-RepoPath ([string]$ProfileObject.model)
+    $modelDisplay = [string]$ProfileObject.model
+    if ($ModelPathOverride) {
+        $modelPath = $ModelPathOverride
+        $modelDisplay = ConvertTo-RepoRelativePath -Path $ModelPathOverride
+    } else {
+        $modelPath = Resolve-RepoPath ([string]$ProfileObject.model)
+    }
     if (-not (Test-Path -LiteralPath $modelPath)) {
         throw "Model from profile '$ProfileName' was not found: $modelPath"
     }
@@ -611,7 +944,7 @@ function Invoke-ProfileQuery {
 
     return [pscustomobject][ordered]@{
         profile = $ProfileName
-        model = [string]$ProfileObject.model
+        model = $modelDisplay
         query = $QueryName
         query_index = $queryIndex
         status = $status
@@ -1004,6 +1337,7 @@ if (-not (Test-Path -LiteralPath $reportDirPath)) {
 }
 
 $results = @()
+$parameterizedModels = @()
 foreach ($profileNameValue in (Get-SelectedProfileNames -Draft $draft)) {
     $profileName = [string]$profileNameValue
     $profilePath = Join-Path $repoRoot "framework\profiles\$profileName.json"
@@ -1012,12 +1346,20 @@ foreach ($profileNameValue in (Get-SelectedProfileNames -Draft $draft)) {
     }
 
     $profileObject = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+    $parameterizedModel = New-ParameterizedModel -Draft $draft -ProfileName $profileName -ProfileObject $profileObject
+    $modelPathOverride = $null
+    if ($parameterizedModel) {
+        $parameterizedModels += $parameterizedModel
+        $modelPathOverride = [string]$parameterizedModel.model_path
+        Write-Host "Parameterized model: $($parameterizedModel.model)"
+    }
+
     $queryNames = Get-QueryNamesForProfile -Draft $draft -ProfileName $profileName -ProfileObject $profileObject
 
     foreach ($queryNameValue in $queryNames) {
         $queryName = [string]$queryNameValue
         Write-Host "Running $profileName :: $queryName"
-        $result = Invoke-ProfileQuery -ProfileName $profileName -QueryName $queryName -ProfileObject $profileObject -VerifytaPath $Verifyta
+        $result = Invoke-ProfileQuery -ProfileName $profileName -QueryName $queryName -ProfileObject $profileObject -ModelPathOverride $modelPathOverride -VerifytaPath $Verifyta
         $results += $result
         Write-Host "  -> $($result.status)"
     }
@@ -1046,7 +1388,7 @@ if ($coverageStatus -eq "partially_supported") {
 
 $report = [pscustomobject][ordered]@{
     tool = "lwm2m-ifv-profile-assistant"
-    prototype_version = "0.1"
+    prototype_version = "0.2"
     generated_at = (Get-Date).ToString("o")
     accepted = $accepted
     verification_completed = $verificationCompleted
@@ -1063,6 +1405,7 @@ $report = [pscustomobject][ordered]@{
     profile_instances = @(Get-ProfileInstances -Draft $draft)
     merged_query_sets = @(Get-MergedQuerySets -Draft $draft)
     parameters = $draft.parameters
+    parameterized_models = $parameterizedModels
     results = $results
     claim_boundary = "This prototype reports only the listed UPPAAL query results under the selected bounded models and profile parameters. LLM or routing text is not a formal claim."
 }

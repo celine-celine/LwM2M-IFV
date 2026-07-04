@@ -23,7 +23,7 @@
   "unsupported_requirements": [],
   "clarification_questions": [],
   "assumptions": [
-    "Remote high latency is represented by the network_loss_profile metadata field until XML parameter generation is enabled.",
+    "Remote high latency is injected into the generated UPPAAL XML through ACK timeout, loss weights, and relaxed onboarding deadline bounds.",
     "Security overhead is represented by the bounded security_overhead_profile parameter."
   ],
   "profile_instances": [

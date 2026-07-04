@@ -141,10 +141,11 @@ onboarding_reliability_remote
 onboarding_reliability_strict_deadline
 ```
 
-These scenario labels record the intended network and deadline assumptions in
-the configuration draft. They are metadata in the current prototype; automatic
-UPPAAL XML parameter generation is the next step if numerically different model
-constants are required for each scenario.
+For SMC profiles, the assistant materializes selected network and deadline
+parameters into generated UPPAAL XML copies under
+`framework/generated/parameterized/` before running `verifyta`. The original
+models stay unchanged. Qualitative security/admission profiles currently use
+their checked-in executable models directly.
 
 Run validation and verification:
 

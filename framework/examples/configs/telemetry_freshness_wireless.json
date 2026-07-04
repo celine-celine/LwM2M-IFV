@@ -23,8 +23,8 @@
   "unsupported_requirements": [],
   "clarification_questions": [],
   "assumptions": [
-    "The current executable SMC model uses the bounded observation reliability profile; scenario labels are recorded as metadata until XML parameter generation is enabled.",
-    "Moderate wireless loss is represented by the network_loss_profile metadata field."
+    "The bounded observation reliability profile is parameterized before verification.",
+    "Moderate wireless loss is injected into the generated UPPAAL XML through notification, ACK, and Reset weights."
   ],
   "profile_instances": [
     {

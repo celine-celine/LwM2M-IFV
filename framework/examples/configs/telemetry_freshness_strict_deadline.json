@@ -23,8 +23,8 @@
   "unsupported_requirements": [],
   "clarification_questions": [],
   "assumptions": [
-    "The strict deadline is represented as profile metadata until XML parameter generation is enabled.",
-    "The bounded observation SMC profile is used as the current executable approximation."
+    "The strict deadline profile is injected into the generated UPPAAL XML through OBSERVATION_DEADLINE and SMC query bounds.",
+    "The bounded observation SMC profile is used as the executable reliability model."
   ],
   "profile_instances": [
     {

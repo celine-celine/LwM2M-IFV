@@ -9,6 +9,7 @@ overleaf-paper/
 
 # LLM-generated drafts and verification evidence reports
 framework/generated/configs/
+framework/generated/parameterized/
 framework/generated/reports/
 
 # LaTeX build artifacts

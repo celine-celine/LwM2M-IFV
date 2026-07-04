@@ -23,7 +23,7 @@
   "unsupported_requirements": [],
   "clarification_questions": [],
   "assumptions": [
-    "The strict commissioning deadline is represented by deadline_profile metadata until XML parameter generation is enabled.",
+    "The strict commissioning deadline is injected into the generated Bootstrap and Registration SMC XML models.",
     "The current executable model uses the bounded onboarding SMC profile."
   ],
   "profile_instances": [
