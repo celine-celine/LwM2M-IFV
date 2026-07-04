@@ -1,0 +1,71 @@
+{
+  "requirement_id": "onboarding_reliability_strict_deadline_demo",
+  "source_text": "Estimate bootstrap and registration reliability for a strict commissioning deadline on the shop floor. The device should complete onboarding under bounded security overhead, loss, timeout, and retransmission settings.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "onboarding_reliability"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "deadline": "strict_onboarding_deadline",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "commissioning_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate bootstrap reliability under a strict commissioning deadline.",
+    "Estimate registration reliability under a strict commissioning deadline."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "The strict commissioning deadline is represented by deadline_profile metadata until XML parameter generation is enabled.",
+    "The current executable model uses the bounded onboarding SMC profile."
+  ],
+  "profile_instances": [
+    {
+      "template": "onboarding_reliability_template",
+      "intent": "onboarding_reliability",
+      "profile": "bootstrap-smc",
+      "queries": [
+        "bootstrap_success_probability",
+        "bootstrap_failure_probability",
+        "expected_retransmission_count",
+        "expected_config_loss_count"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "deadline_profile": "strict_onboarding_deadline",
+        "max_retransmit": 4
+      }
+    },
+    {
+      "template": "onboarding_reliability_template",
+      "intent": "onboarding_reliability",
+      "profile": "registration-smc",
+      "queries": [
+        "registration_success_probability",
+        "registration_failure_probability",
+        "expected_retransmission_count",
+        "expected_lost_registration_messages"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "deadline_profile": "strict_onboarding_deadline",
+        "max_retransmit": 4
+      }
+    }
+  ],
+  "parameters": {
+    "security_overhead_profile": "dtls_or_oscore_bounded",
+    "network_loss_profile": "shop_floor_lan_low_loss",
+    "deadline_profile": "strict_onboarding_deadline",
+    "max_retransmit": 4
+  }
+}

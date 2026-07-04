@@ -1,0 +1,3 @@
+Estimate bootstrap and registration reliability for a remote maintenance
+connection with higher latency than the local shop-floor LAN. Security overhead,
+timeouts, and retransmission should be considered for the onboarding process.

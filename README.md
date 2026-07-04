@@ -131,6 +131,21 @@ telemetry_freshness_lan
 onboarding_reliability
 ```
 
+Additional probabilistic scenario examples exercise the same executable SMC
+profiles with different auditable scenario labels:
+
+```text
+telemetry_freshness_wireless
+telemetry_freshness_strict_deadline
+onboarding_reliability_remote
+onboarding_reliability_strict_deadline
+```
+
+These scenario labels record the intended network and deadline assumptions in
+the configuration draft. They are metadata in the current prototype; automatic
+UPPAAL XML parameter generation is the next step if numerically different model
+constants are required for each scenario.
+
 Run validation and verification:
 
 ```powershell
@@ -139,7 +154,11 @@ $configs = @(
   "bootstrap_registration_admission",
   "offline_cleanup_policy",
   "telemetry_freshness_lan",
-  "onboarding_reliability"
+  "onboarding_reliability",
+  "telemetry_freshness_wireless",
+  "telemetry_freshness_strict_deadline",
+  "onboarding_reliability_remote",
+  "onboarding_reliability_strict_deadline"
 )
 
 foreach ($name in $configs) {

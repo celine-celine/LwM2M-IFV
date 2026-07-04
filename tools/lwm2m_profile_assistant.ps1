@@ -633,7 +633,7 @@ function Write-RunSummary {
     $sat = @($Report.results | Where-Object { $_.status -eq "SAT" }).Count
     $notSat = @($Report.results | Where-Object { $_.status -eq "NOT_SAT" }).Count
     $errors = @($Report.results | Where-Object { $_.status -eq "ERROR" -or $_.status -eq "UNKNOWN" }).Count
-    $smcCompleted = @($Report.results | Where-Object { $_.status -eq "SMC_COMPLETED" -or $_.status -eq "COMPLETED" }).Count
+    $smcParsed = @($Report.results | Where-Object { $null -ne $_.smc }).Count
 
     Write-Host ""
     Write-Host "Verification summary"
@@ -648,7 +648,7 @@ function Write-RunSummary {
     Write-Host "Accepted    : $($Report.accepted)"
     Write-Host "Completed   : $($Report.verification_completed)"
     Write-Host "Profiles    : $(@($Report.selected_profiles) -join ', ')"
-    Write-Host "Queries     : $total total, $sat SAT, $notSat NOT_SAT, $smcCompleted completed/SMC, $errors error"
+    Write-Host "Queries     : $total total, $sat SAT, $notSat NOT_SAT, $smcParsed SMC parsed, $errors error"
 
     if (@($Report.not_satisfied_queries).Count -gt 0) {
         Write-Host "Not SAT     : $(@($Report.not_satisfied_queries) -join ', ')"

@@ -179,9 +179,20 @@
         "network_loss_profile": {
           "type": "enum",
           "values": [
-            "shop_floor_lan_low_loss"
+            "shop_floor_lan_low_loss",
+            "moderate_loss_wireless",
+            "remote_maintenance_high_latency"
           ],
           "default": "shop_floor_lan_low_loss"
+        },
+        "freshness_deadline_profile": {
+          "type": "enum",
+          "values": [
+            "bounded_control_monitoring",
+            "strict_control_deadline",
+            "relaxed_monitoring_deadline"
+          ],
+          "default": "bounded_control_monitoring"
         },
         "observation_reset_enabled": {
           "type": "boolean",
@@ -230,9 +241,20 @@
         "network_loss_profile": {
           "type": "enum",
           "values": [
-            "shop_floor_lan_low_loss"
+            "shop_floor_lan_low_loss",
+            "moderate_loss_wireless",
+            "remote_maintenance_high_latency"
           ],
           "default": "shop_floor_lan_low_loss"
+        },
+        "deadline_profile": {
+          "type": "enum",
+          "values": [
+            "standard_onboarding_deadline",
+            "strict_onboarding_deadline",
+            "relaxed_remote_onboarding_deadline"
+          ],
+          "default": "standard_onboarding_deadline"
         },
         "max_retransmit": {
           "type": "integer",

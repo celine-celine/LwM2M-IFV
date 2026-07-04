@@ -1,0 +1,3 @@
+Estimate bootstrap and registration reliability for a strict commissioning
+deadline on the shop floor. The device should complete onboarding under bounded
+security overhead, loss, timeout, and retransmission settings.

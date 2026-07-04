@@ -1,0 +1,4 @@
+The monitoring application should evaluate telemetry freshness for a wireless
+shop-floor segment with moderate packet loss. Observation should use OSCORE,
+retransmission, and Reset handling, and the report should expose notification
+delivery and expected lost notifications.

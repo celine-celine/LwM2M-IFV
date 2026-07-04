@@ -1,0 +1,57 @@
+{
+  "requirement_id": "telemetry_freshness_wireless_demo",
+  "source_text": "The monitoring application should evaluate telemetry freshness for a wireless shop-floor segment with moderate packet loss. Observation should use OSCORE, retransmission, and Reset handling, and the report should expose notification delivery and expected lost notifications.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "telemetry_freshness_under_loss"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "network": "moderate_loss_wireless",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "wireless_sensor_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate telemetry freshness under moderate wireless loss.",
+    "Report delivery probability and expected lost notifications."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "The current executable SMC model uses the bounded observation reliability profile; scenario labels are recorded as metadata until XML parameter generation is enabled.",
+    "Moderate wireless loss is represented by the network_loss_profile metadata field."
+  ],
+  "profile_instances": [
+    {
+      "template": "observation_reliability_template",
+      "intent": "telemetry_freshness_under_loss",
+      "profile": "observation-long-lived-reset-smc",
+      "queries": [
+        "notification_delivery",
+        "bounded_cycle_completion_probability",
+        "reset_probability",
+        "expected_received",
+        "expected_lost"
+      ],
+      "parameters": {
+        "oscore_enabled": true,
+        "retransmission_enabled": true,
+        "network_loss_profile": "moderate_loss_wireless",
+        "freshness_deadline_profile": "bounded_control_monitoring",
+        "observation_reset_enabled": true
+      }
+    }
+  ],
+  "parameters": {
+    "oscore_enabled": true,
+    "retransmission_enabled": true,
+    "network_loss_profile": "moderate_loss_wireless",
+    "freshness_deadline_profile": "bounded_control_monitoring",
+    "observation_reset_enabled": true
+  }
+}

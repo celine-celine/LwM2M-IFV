@@ -1,0 +1,56 @@
+{
+  "requirement_id": "telemetry_freshness_strict_deadline_demo",
+  "source_text": "The monitoring application should evaluate telemetry freshness under a strict control deadline. Telemetry should be considered useful only when the bounded Observation cycle delivers fresh notifications quickly enough for control monitoring.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "telemetry_freshness_under_loss"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "deadline": "strict_control_deadline",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "control_monitoring_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate telemetry freshness under a strict control deadline.",
+    "Report bounded cycle completion and expected received notifications."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "The strict deadline is represented as profile metadata until XML parameter generation is enabled.",
+    "The bounded observation SMC profile is used as the current executable approximation."
+  ],
+  "profile_instances": [
+    {
+      "template": "observation_reliability_template",
+      "intent": "telemetry_freshness_under_loss",
+      "profile": "observation-long-lived-reset-smc",
+      "queries": [
+        "notification_delivery",
+        "bounded_cycle_completion_probability",
+        "expected_received",
+        "expected_lost"
+      ],
+      "parameters": {
+        "oscore_enabled": true,
+        "retransmission_enabled": true,
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "freshness_deadline_profile": "strict_control_deadline",
+        "observation_reset_enabled": true
+      }
+    }
+  ],
+  "parameters": {
+    "oscore_enabled": true,
+    "retransmission_enabled": true,
+    "network_loss_profile": "shop_floor_lan_low_loss",
+    "freshness_deadline_profile": "strict_control_deadline",
+    "observation_reset_enabled": true
+  }
+}

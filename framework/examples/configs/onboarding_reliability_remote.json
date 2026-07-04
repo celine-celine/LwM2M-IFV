@@ -1,0 +1,71 @@
+{
+  "requirement_id": "onboarding_reliability_remote_demo",
+  "source_text": "Estimate bootstrap and registration reliability for a remote maintenance connection with higher latency than the local shop-floor LAN. Security overhead, timeouts, and retransmission should be considered for the onboarding process.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "onboarding_reliability"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "network": "remote_maintenance_high_latency",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "remote_maintenance_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate bootstrap reliability for remote onboarding.",
+    "Estimate registration reliability for remote onboarding."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "Remote high latency is represented by the network_loss_profile metadata field until XML parameter generation is enabled.",
+    "Security overhead is represented by the bounded security_overhead_profile parameter."
+  ],
+  "profile_instances": [
+    {
+      "template": "onboarding_reliability_template",
+      "intent": "onboarding_reliability",
+      "profile": "bootstrap-smc",
+      "queries": [
+        "bootstrap_success_probability",
+        "bootstrap_failure_probability",
+        "expected_retransmission_count",
+        "expected_config_loss_count"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "remote_maintenance_high_latency",
+        "deadline_profile": "relaxed_remote_onboarding_deadline",
+        "max_retransmit": 4
+      }
+    },
+    {
+      "template": "onboarding_reliability_template",
+      "intent": "onboarding_reliability",
+      "profile": "registration-smc",
+      "queries": [
+        "registration_success_probability",
+        "registration_failure_probability",
+        "expected_retransmission_count",
+        "expected_lost_registration_messages"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "remote_maintenance_high_latency",
+        "deadline_profile": "relaxed_remote_onboarding_deadline",
+        "max_retransmit": 4
+      }
+    }
+  ],
+  "parameters": {
+    "security_overhead_profile": "dtls_or_oscore_bounded",
+    "network_loss_profile": "remote_maintenance_high_latency",
+    "deadline_profile": "relaxed_remote_onboarding_deadline",
+    "max_retransmit": 4
+  }
+}

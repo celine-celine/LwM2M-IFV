@@ -1,0 +1,4 @@
+The monitoring application should evaluate telemetry freshness under a strict
+control deadline. Telemetry should be considered useful only when the bounded
+Observation cycle delivers fresh notifications quickly enough for control
+monitoring.
