@@ -1,0 +1,47 @@
+{
+  "profile_id": "industrial-policy-binding-cleanup",
+  "procedure": "industrial-scenario",
+  "lwm2m_version": "1.2",
+  "description": "Specific industrial scenario layer model with a PolicyMonitor automaton that maps binding, identity, clone rejection, and cleanup events to command authorization and stale-session cleanup predicates.",
+  "model": "framework/generated/industrial/IndustrialPolicy_BindingCleanup.xml",
+  "security": {
+    "bootstrap_registration_binding": true,
+    "endpoint_identity_binding": true,
+    "duplicate_endpoint_detection": true
+  },
+  "registration": {
+    "clients": 2,
+    "legitimate_client": 0,
+    "cloned_client": 1,
+    "deregister_enabled": true,
+    "abnormal_offline_enabled": true,
+    "cleanup_policy_enabled": true
+  },
+  "industrial_policy": {
+    "policy_monitor_automaton": true,
+    "command_authorization_requires_binding": true,
+    "command_authorization_requires_identity": true,
+    "cloned_device_alarm": true,
+    "stale_session_cleanup": true
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "legitimate_device_authorized": 1,
+    "clone_rejected_by_policy": 2,
+    "deregister_cleanup_reachable": 3,
+    "offline_cleanup_reachable": 4,
+    "commands_require_verified_active_session": 5,
+    "rejected_clone_not_authorized": 6,
+    "cleanup_revokes_authorization": 7,
+    "duplicate_endpoint_is_attack_signal": 8,
+    "clone_never_authorized": 9
+  },
+  "primary_query": "legitimate_device_authorized",
+  "industrial_properties": [
+    "policy_monitor_binding",
+    "command_authorization",
+    "cloned_device_rejection",
+    "stale_session_cleanup",
+    "abnormal_offline_cleanup"
+  ]
+}

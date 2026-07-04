@@ -1,0 +1,32 @@
+{
+  "profile_id": "observation-long-lived-reset",
+  "procedure": "observation",
+  "lwm2m_version": "1.2",
+  "description": "Improved Observation flow with a long-lived Observe relation, multiple Notify messages, and abstract CoAP ACK/Reset handling.",
+  "model": "framework/generated/observation/Observation_LongLived_Reset.xml",
+  "flow_adjustments": {
+    "long_lived_observe_relation": true,
+    "notify_does_not_immediately_stop_observation": true,
+    "coap_ack_enabled": true,
+    "coap_reset_enabled": true,
+    "server_cancel_after_bounded_notifications": true
+  },
+  "transport": {
+    "confirmable_notify": true,
+    "reset_cancels_observation": true
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "workflow_completion": 1,
+    "multiple_notify_before_cancel": 2,
+    "reset_reachable": 3,
+    "reset_cancels_observation": 4,
+    "bounded_notification_count": 5
+  },
+  "primary_query": "deadlock_freedom",
+  "industrial_properties": [
+    "long_lived_observation",
+    "reset_triggered_cancellation",
+    "bounded_monitoring_cycle"
+  ]
+}

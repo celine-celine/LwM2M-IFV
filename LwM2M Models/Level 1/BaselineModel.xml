@@ -1,0 +1,561 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+typedef int[0,12] client_state_t;  // 扩展3个写操作状态
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAPPING = 1;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 2;
+const int CLIENT_STATE_REGISTERING = 3;
+const int CLIENT_STATE_REGISTER_RECEIVED = 4;
+const int CLIENT_STATE_REGISTERED = 5;
+const int CLIENT_STATE_OBSERVING = 6;
+const int CLIENT_STATE_NOTIFYING = 7;
+const int CLIENT_STATE_WRITE_PENDING = 8;     // 新增：等待写请求
+const int CLIENT_STATE_WRITE_PROCESSING = 9;  // 新增：处理写请求
+const int CLIENT_STATE_WRITE_RESPONDING = 10; // 新增：响应写请求
+const int CLIENT_STATE_ERROR = 12;
+
+// 2.2 资源类型定义
+typedef int[0,3] resource_id_t;
+const int RESOURCE_TEMPERATURE = 0;
+const int RESOURCE_STATUS = 1;
+const int RESOURCE_PRODUCTION_COUNT = 2;
+const int RESOURCE_ALARM = 3;
+
+// 2.3 通道定义
+// 原有通道
+chan bootstrap_start_client[MAX_CLIENTS];
+chan bootstrap_credential[MAX_CLIENTS];
+chan bootstrap_config[MAX_CLIENTS];
+chan bootstrap_complete[MAX_CLIENTS];
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_complete[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+
+// 新增观察通道
+chan observe_start[MAX_CLIENTS];
+chan observe_stop[MAX_CLIENTS];
+chan notification[MAX_CLIENTS];
+
+// 3.3 新增写操作通道（精简设计）
+chan write_request[MAX_CLIENTS];      // 服务器-&gt;客户端：写请求
+chan write_response[MAX_CLIENTS];     // 客户端-&gt;服务器：写响应
+
+// 2.4 共享变量（优化用于验证）
+client_state_t client_state[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool client_observed[MAX_CLIENTS];
+bool bootstrap_in_progress = false;
+bool registration_in_progress = false;
+bool observation_in_progress = false;
+
+int bootstrap_completed_count = 0;
+int registration_completed_count = 0;
+int notification_count = 0;
+int observation_cycle_count = 0;
+
+// 添加验证辅助变量
+int client_observation_count[MAX_CLIENTS];  // 移到全局，用于公平性验证
+bool client_ever_observed[MAX_CLIENTS];     // 记录客户端是否曾被观察
+
+int resource_value[MAX_CLIENTS][4];
+int observed_resource[MAX_CLIENTS];
+
+// 减少状态空间：缩小参数范围
+const int OBSERVATION_INTERVAL = 3;          // 从5减少到3
+const int NOTIFICATION_THRESHOLD = 2;        // 从3减少到2
+const int MAX_OBSERVATION_CYCLES = 2;        // 从4减少到2
+const int MAX_WRITE_OPERATIONS = 2;
+
+
+// 3.4 新增共享变量
+bool write_in_progress = false;       // 写操作是否进行中
+int write_operation_count = 0;        // 写操作计数
+int write_target_resource[MAX_CLIENTS]; // 要写入的资源ID
+int write_target_value[MAX_CLIENTS];    // 要写入的值
+bool write_completed[MAX_CLIENTS];      // 写操作是否完成
+
+bool observation_completed = false;
+</declaration>
+	<template>
+		<name>ObservationHandler</name>
+		<declaration>int selected_client = -1;
+int observation_attempts = 0;
+
+bool waiting_for_notification = false;
+int client_observation_count[MAX_CLIENTS];</declaration>
+		<location id="id0" x="-425" y="-611">
+			<name x="-435" y="-645">S_IDLE</name>
+		</location>
+		<location id="id1" x="-425" y="-399">
+			<name x="-435" y="-433">S_WAITING_REGISTRATION</name>
+		</location>
+		<location id="id2" x="59" y="-204">
+			<name x="49" y="-238">S_STARTING_OBSERVE</name>
+		</location>
+		<location id="id3" x="-688" y="-204">
+			<name x="-698" y="-238">S_COMPLETED</name>
+		</location>
+		<location id="id4" x="416" y="-204">
+			<name x="406" y="-238">S_WAITING_NOTIFICATION</name>
+		</location>
+		<location id="id5" x="68" y="-34">
+			<name x="59" y="-68">S_STOPPING_OBSERVE</name>
+		</location>
+		<location id="id6" x="-424" y="-204">
+			<name x="-425" y="-246">S_CLIENT_SELECTION</name>
+			<committed/>
+		</location>
+		<init ref="id0"/>
+		<transition id="id7">
+			<source ref="id3"/>
+			<target ref="id3"/>
+			<nail x="-688" y="-331"/>
+			<nail x="-663" y="-340"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id4"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="86" y="-136">notification[selected_client]?</label>
+			<label kind="assignment" x="86" y="-119">observation_cycle_count = observation_cycle_count + 1</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-407" y="-51">observe_stop[selected_client]!</label>
+			<nail x="-425" y="-34"/>
+		</transition>
+		<transition id="id10">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<nail x="340" y="-348"/>
+			<nail x="484" y="-348"/>
+		</transition>
+		<transition id="id11">
+			<source ref="id6"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-697" y="-204">observation_attempts &gt;= MAX_OBSERVATION_CYCLES</label>
+			<label kind="assignment" x="-714" y="-178">observation_in_progress = false,
+observation_completed = true</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id6"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-391" y="-221">observation_attempts &lt; MAX_OBSERVATION_CYCLES</label>
+			<label kind="assignment" x="-406" y="-204">selected_client = observation_attempts % MAX_CLIENTS,
+observation_attempts = observation_attempts + 1,
+client_observation_count[selected_client] = 
+client_observation_count[selected_client] + 1</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id1"/>
+			<target ref="id6"/>
+			<label kind="guard" x="-587" y="-356">registration_completed_count == MAX_CLIENTS</label>
+			<label kind="assignment" x="-561" y="-331">observation_in_progress = true,
+observation_attempts = 0,
+selected_client = -1</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id2"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="85" y="-187">observe_start[selected_client]!</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-535" y="-560">observation_in_progress = false,
+client_observation_count[0] = 0,
+client_observation_count[1] = 0,
+observation_completed = false</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>int registration_attempts = 0;
+const int MAX_REGISTRATION_RETRIES = 3;
+
+int observation_counter = 0;
+bool notification_sent = false;
+
+int write_response_code = 0;  // 0=成功, 1=失败</declaration>
+		<location id="id16" x="-1105" y="-382">
+			<name x="-1115" y="-416">INIT</name>
+		</location>
+		<location id="id17" x="-663" y="-382">
+			<name x="-706" y="-424">S_BOOTSTRAP_CREDENTIAL</name>
+		</location>
+		<location id="id18" x="-280" y="-382">
+			<name x="-290" y="-416">S_BOOTSTRAP_CONFIG</name>
+		</location>
+		<location id="id19" x="-280" y="-170">
+			<name x="-290" y="-204">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id20" x="-697" y="-170">
+			<name x="-799" y="-212">S_REGISTER_SEND</name>
+		</location>
+		<location id="id21" x="-1105" y="-170">
+			<name x="-1115" y="-204">S_REGISTER_OBJECTS</name>
+		</location>
+		<location id="id22" x="-1105" y="0">
+			<name x="-1115" y="-34">S_REGISTER_WAIT</name>
+		</location>
+		<location id="id23" x="-272" y="0">
+			<name x="-282" y="-34">S_REGISTERED</name>
+		</location>
+		<location id="id24" x="-697" y="0">
+			<name x="-707" y="-34">S_REGISTER_RECEIVED</name>
+			<committed/>
+		</location>
+		<location id="id25" x="-272" y="229">
+			<name x="-282" y="195">S_OBSERVING</name>
+		</location>
+		<location id="id26" x="-1096" y="229">
+			<name x="-1106" y="195">S_NOTIFYING</name>
+		</location>
+		<init ref="id16"/>
+		<transition id="id27">
+			<source ref="id26"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-1078" y="97">observe_stop[id]?</label>
+			<label kind="assignment" x="-1078" y="114">client_observed[id] = false,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id25"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-186" y="119">observe_stop[id]?</label>
+			<label kind="assignment" x="-187" y="136">client_observed[id] = false,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+			<nail x="-238" y="204"/>
+			<nail x="-102" y="136"/>
+		</transition>
+		<transition id="id29">
+			<source ref="id26"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-858" y="306">notification[id]!</label>
+			<label kind="assignment" x="-858" y="323">notification_sent = true,
+notification_count = notification_count + 1,
+client_state[id] = CLIENT_STATE_OBSERVING</label>
+			<nail x="-654" y="314"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id25"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-935" y="187">resource_value[id][observed_resource[id]] &gt;= NOTIFICATION_THRESHOLD &amp;&amp;
+notification_sent == false</label>
+			<label kind="assignment" x="-935" y="229">client_state[id] = CLIENT_STATE_NOTIFYING</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id25"/>
+			<target ref="id25"/>
+			<label kind="guard" x="-476" y="416">resource_value[id][observed_resource[id]] &lt; 10</label>
+			<label kind="assignment" x="-459" y="442">observation_counter = observation_counter + 1,
+resource_value[id][observed_resource[id]] = 
+(observation_counter % OBSERVATION_INTERVAL == 0) ? 
+resource_value[id][observed_resource[id]] + 1 : 
+resource_value[id][observed_resource[id]]</label>
+			<nail x="-323" y="425"/>
+			<nail x="-204" y="425"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id23"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-544" y="51">observe_start[id]?</label>
+			<label kind="assignment" x="-544" y="68">client_observed[id] = true,
+observation_counter = 0,
+notification_sent = false,
+observed_resource[id] = id % 4,
+client_state[id] = CLIENT_STATE_OBSERVING,
+client_ever_observed[id] = true</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id24"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-679" y="-17">register_ack[id]!</label>
+			<label kind="assignment" x="-679" y="0">client_state[id] = CLIENT_STATE_REGISTERED,
+client_registered[id] = true,
+registration_completed_count = registration_completed_count + 1</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id22"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-1087" y="-17">register_complete[id]?</label>
+			<label kind="assignment" x="-1087" y="0">client_state[id] = CLIENT_STATE_REGISTER_RECEIVED</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id21"/>
+			<target ref="id22"/>
+			<label kind="synchronisation" x="-1105" y="-102">register_objects[id]!</label>
+		</transition>
+		<transition id="id36">
+			<source ref="id20"/>
+			<target ref="id21"/>
+			<label kind="synchronisation" x="-1087" y="-187">register_start[id]!</label>
+			<label kind="assignment" x="-1087" y="-170">client_state[id] = CLIENT_STATE_REGISTERING</label>
+		</transition>
+		<transition id="id37">
+			<source ref="id19"/>
+			<target ref="id20"/>
+			<label kind="synchronisation" x="-646" y="-204">bootstrap_complete[id]!</label>
+			<label kind="assignment" x="-646" y="-187">client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+bootstrap_completed_count = bootstrap_completed_count + 1</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id18"/>
+			<target ref="id19"/>
+			<label kind="synchronisation" x="-280" y="-293">bootstrap_config[id]?</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="synchronisation" x="-645" y="-399">bootstrap_credential[id]!</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id16"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="-1087" y="-395">bootstrap_start_client[id]?</label>
+			<label kind="assignment" x="-1096" y="-374">client_state[id] = CLIENT_STATE_BOOTSTRAPPING</label>
+		</transition>
+		<transition id="id41">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<label kind="assignment" x="-1129" y="-272">client_state[id] = CLIENT_STATE_INIT</label>
+			<nail x="-1147" y="-272"/>
+			<nail x="-1071" y="-272"/>
+		</transition>
+	</template>
+	<template>
+		<name>BootstrapHandler</name>
+		<declaration>int current_client = 0;
+</declaration>
+		<location id="id42" x="-433" y="-204">
+			<name x="-443" y="-238">S_IDLE</name>
+		</location>
+		<location id="id43" x="-204" y="-204">
+			<name x="-214" y="-238">S_SENDING_START</name>
+		</location>
+		<location id="id44" x="145" y="-204">
+			<name x="135" y="-238">S_WAITING_CREDENTIAL</name>
+		</location>
+		<location id="id45" x="408" y="-204">
+			<name x="398" y="-238">S_SENDING_CONFIG</name>
+		</location>
+		<location id="id46" x="552" y="-204">
+			<name x="542" y="-238">S_WAITING_COMPLETE</name>
+		</location>
+		<location id="id47" x="-204" y="-578">
+			<name x="-214" y="-612">S_ALL_COMPLETE</name>
+		</location>
+		<location id="id48" x="-204" y="-365">
+			<name x="-214" y="-399">S_SELECTING</name>
+			<committed/>
+		</location>
+		<location id="id49" x="34" y="-578">
+			<name x="24" y="-612">S_FINAL_IDLE</name>
+		</location>
+		<init ref="id42"/>
+		<transition id="id50">
+			<source ref="id49"/>
+			<target ref="id49"/>
+			<nail x="34" y="-688"/>
+			<nail x="51" y="-671"/>
+		</transition>
+		<transition id="id51">
+			<source ref="id47"/>
+			<target ref="id49"/>
+		</transition>
+		<transition id="id52">
+			<source ref="id48"/>
+			<target ref="id43"/>
+			<label kind="guard" x="-289" y="-289">current_client &lt; MAX_CLIENTS</label>
+		</transition>
+		<transition id="id53">
+			<source ref="id48"/>
+			<target ref="id47"/>
+			<label kind="guard" x="-297" y="-510">current_client &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="-297" y="-476">bootstrap_in_progress = false</label>
+		</transition>
+		<transition id="id54">
+			<source ref="id46"/>
+			<target ref="id48"/>
+			<label kind="synchronisation" x="163" y="-357">bootstrap_complete[current_client]?</label>
+			<label kind="assignment" x="163" y="-340">current_client = current_client + 1</label>
+			<nail x="552" y="-365"/>
+		</transition>
+		<transition id="id55">
+			<source ref="id45"/>
+			<target ref="id46"/>
+			<label kind="synchronisation" x="425" y="-195">bootstrap_config[current_client]!</label>
+		</transition>
+		<transition id="id56">
+			<source ref="id44"/>
+			<target ref="id45"/>
+			<label kind="synchronisation" x="163" y="-221">bootstrap_credential[current_client]?</label>
+		</transition>
+		<transition id="id57">
+			<source ref="id43"/>
+			<target ref="id44"/>
+			<label kind="synchronisation" x="-186" y="-221">bootstrap_start_client[current_client]!</label>
+		</transition>
+		<transition id="id58">
+			<source ref="id42"/>
+			<target ref="id48"/>
+			<label kind="assignment" x="-416" y="-323">bootstrap_in_progress = true</label>
+		</transition>
+	</template>
+	<template>
+		<name>RegistrationHandler</name>
+		<declaration>int current_client = 0;
+bool client_reg_processed[MAX_CLIENTS];
+</declaration>
+		<location id="id59" x="-433" y="-255">
+			<name x="-443" y="-289">S_IDLE</name>
+		</location>
+		<location id="id60" x="-195" y="-255">
+			<name x="-205" y="-289">S_WAITING_BOOTSTRAP</name>
+		</location>
+		<location id="id61" x="68" y="-255">
+			<name x="58" y="-289">S_SELECTING_CLIENT</name>
+		</location>
+		<location id="id62" x="493" y="-255">
+			<name x="483" y="-289">S_WAITING_REG_START</name>
+		</location>
+		<location id="id63" x="492" y="-34">
+			<name x="482" y="-68">S_WAITING_REG_OBJECTS</name>
+		</location>
+		<location id="id64" x="289" y="-34">
+			<name x="279" y="-68">S_SENDING_REG_COMPLETE</name>
+		</location>
+		<location id="id65" x="-204" y="-42">
+			<name x="-214" y="-76">S_ALL_REGISTERED</name>
+		</location>
+		<location id="id66" x="-416" y="-42">
+			<name x="-426" y="-76">S_FINAL_IDLE</name>
+		</location>
+		<location id="id67" x="68" y="-34">
+			<name x="58" y="-68">S_WAITING_ACK</name>
+		</location>
+		<init ref="id59"/>
+		<transition id="id68">
+			<source ref="id66"/>
+			<target ref="id66"/>
+			<nail x="-467" y="178"/>
+			<nail x="-408" y="136"/>
+		</transition>
+		<transition id="id69">
+			<source ref="id67"/>
+			<target ref="id61"/>
+			<label kind="synchronisation" x="68" y="-161">register_ack[current_client]?</label>
+			<label kind="assignment" x="-8" y="-144">client_reg_processed[current_client] = true,
+current_client = current_client + 1</label>
+		</transition>
+		<transition id="id70">
+			<source ref="id64"/>
+			<target ref="id67"/>
+			<label kind="synchronisation" x="86" y="-51">register_complete[current_client]!</label>
+		</transition>
+		<transition id="id71">
+			<source ref="id65"/>
+			<target ref="id66"/>
+		</transition>
+		<transition id="id72">
+			<source ref="id61"/>
+			<target ref="id65"/>
+			<label kind="guard" x="-391" y="-187">!(exists (c: client_id_t) !client_reg_processed[c])</label>
+			<label kind="assignment" x="-391" y="-161">registration_in_progress = false</label>
+		</transition>
+		<transition id="id73">
+			<source ref="id63"/>
+			<target ref="id64"/>
+			<label kind="synchronisation" x="289" y="-17">register_objects[current_client]?</label>
+		</transition>
+		<transition id="id74">
+			<source ref="id62"/>
+			<target ref="id63"/>
+			<label kind="synchronisation" x="373" y="-161">register_start[current_client]?</label>
+		</transition>
+		<transition id="id75">
+			<source ref="id61"/>
+			<target ref="id62"/>
+			<label kind="guard" x="178" y="-331">current_client &lt; MAX_CLIENTS &amp;&amp; 
+!client_reg_processed[current_client]</label>
+		</transition>
+		<transition id="id76">
+			<source ref="id60"/>
+			<target ref="id61"/>
+			<label kind="guard" x="-212" y="-331">bootstrap_completed_count == MAX_CLIENTS</label>
+			<label kind="assignment" x="-187" y="-306">registration_in_progress = true</label>
+		</transition>
+		<transition id="id77">
+			<source ref="id59"/>
+			<target ref="id60"/>
+			<label kind="assignment" x="-467" y="-246">registration_in_progress = false,
+client_reg_processed[0] = false,
+client_reg_processed[1] = false</label>
+		</transition>
+	</template>
+	<system>Client1 = Client(0);
+Client2 = Client(1);
+BootstrapHandler1 = BootstrapHandler();
+RegistrationHandler1 = RegistrationHandler();
+ObservationHandler1 = ObservationHandler();
+
+system Client1, Client2, BootstrapHandler1, 
+       RegistrationHandler1, ObservationHandler1;
+</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt; (Client1.S_BOOTSTRAP_DONE)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:53:02 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (Client2.S_BOOTSTRAP_DONE)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:52:03 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (Client1.S_REGISTERED and Client2.S_REGISTERED)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:53:04 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (ObservationHandler1.S_COMPLETED)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:53:06 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:53:08 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (notification_count &lt;= MAX_OBSERVATION_CYCLES)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 09:53:09 +0800">
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+	</queries>
+</nta>

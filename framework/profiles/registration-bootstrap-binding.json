@@ -1,0 +1,39 @@
+{
+  "profile_id": "registration-bootstrap-binding",
+  "procedure": "registration",
+  "lwm2m_version": "1.2",
+  "description": "Bootstrap-to-Registration security binding profile requiring Registration server identity and credential to match the values provisioned during Bootstrap.",
+  "model": "framework/generated/registration/Registration_BootstrapBinding.xml",
+  "security": {
+    "bootstrap_required": true,
+    "binding_enabled": true,
+    "server_identity_binding": true,
+    "credential_binding": true
+  },
+  "attacker": {
+    "rogue_registration_server_enabled": true,
+    "credential_mismatch_enabled": true,
+    "attack_success_expected": false
+  },
+  "registration": {
+    "clients": 1,
+    "authorized_server_id": 10,
+    "rogue_server_id": 99
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "bound_registration_reachable": 1,
+    "binding_violation_rejected": 2,
+    "registered_server_identity_matches_bootstrap": 3,
+    "registered_credential_matches_bootstrap": 4,
+    "commands_require_binding": 5,
+    "binding_violation_not_accepted": 6
+  },
+  "primary_query": "bound_registration_reachable",
+  "industrial_properties": [
+    "identity_bound_shopfloor_admission",
+    "credential_bound_registration",
+    "rogue_registration_server_rejection",
+    "command_authorization_requires_bootstrap_binding"
+  ]
+}

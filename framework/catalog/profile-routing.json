@@ -1,0 +1,217 @@
+{
+  "version": "prototype-0.1",
+  "description": "Routing catalog for the LwM2M-IFV Profile Assistant prototype. It maps natural-language intents to existing executable framework profiles.",
+  "routes": [
+    {
+      "intent": "duplicate_endpoint_rejection",
+      "mode": "qualitative_security",
+      "summary": "Reject cloned or duplicate endpoints and prevent command authorization for the clone.",
+      "keywords": [
+        "clone",
+        "cloned",
+        "duplicate endpoint",
+        "duplicate",
+        "identity binding",
+        "identity",
+        "command authorization",
+        "reject"
+      ],
+      "selected_profiles": [
+        "registration-identity-binding",
+        "industrial-policy-binding-cleanup"
+      ],
+      "query_selection": [
+        {
+          "profile": "registration-identity-binding",
+          "queries": [
+            "duplicate_endpoint_rejected",
+            "clone_not_authorized",
+            "commands_require_identity_binding"
+          ]
+        },
+        {
+          "profile": "industrial-policy-binding-cleanup",
+          "queries": [
+            "clone_rejected_by_policy",
+            "rejected_clone_not_authorized",
+            "clone_never_authorized"
+          ]
+        }
+      ],
+      "parameters": {
+        "dtls_enabled": true,
+        "identity_binding_required": true,
+        "duplicate_endpoint_policy": "reject",
+        "policy_monitor_enabled": true
+      }
+    },
+    {
+      "intent": "secure_bootstrap_registration_admission",
+      "mode": "qualitative_security",
+      "summary": "Require bootstrap-to-registration binding before accepting registration and management commands.",
+      "keywords": [
+        "bootstrap",
+        "registration binding",
+        "server identity",
+        "credential binding",
+        "secure registration",
+        "malicious provisioning",
+        "fake bootstrap"
+      ],
+      "selected_profiles": [
+        "registration-bootstrap-binding",
+        "industrial-policy-binding-cleanup"
+      ],
+      "query_selection": [
+        {
+          "profile": "registration-bootstrap-binding",
+          "queries": [
+            "bound_registration_reachable",
+            "binding_violation_rejected",
+            "commands_require_binding"
+          ]
+        },
+        {
+          "profile": "industrial-policy-binding-cleanup",
+          "queries": [
+            "legitimate_device_authorized",
+            "commands_require_verified_active_session"
+          ]
+        }
+      ],
+      "parameters": {
+        "dtls_enabled": true,
+        "bootstrap_registration_binding": true,
+        "server_identity_binding": true,
+        "policy_monitor_enabled": true
+      }
+    },
+    {
+      "intent": "offline_cleanup_policy",
+      "mode": "industrial_policy",
+      "summary": "Revoke command authorization when a device deregisters or becomes abnormally offline.",
+      "keywords": [
+        "offline",
+        "stale",
+        "cleanup",
+        "deregister",
+        "deregistration",
+        "lifetime expired",
+        "revoke",
+        "session"
+      ],
+      "selected_profiles": [
+        "registration-deregister-offline",
+        "industrial-policy-binding-cleanup"
+      ],
+      "query_selection": [
+        {
+          "profile": "registration-deregister-offline",
+          "queries": [
+            "deregister_reachable",
+            "offline_cleanup_reachable",
+            "deregister_disables_commands",
+            "offline_cleanup_disables_commands"
+          ]
+        },
+        {
+          "profile": "industrial-policy-binding-cleanup",
+          "queries": [
+            "deregister_cleanup_reachable",
+            "offline_cleanup_reachable",
+            "cleanup_revokes_authorization"
+          ]
+        }
+      ],
+      "parameters": {
+        "deregister_enabled": true,
+        "abnormal_offline_enabled": true,
+        "cleanup_policy_enabled": true,
+        "command_authorization_revoked_on_cleanup": true
+      }
+    },
+    {
+      "intent": "telemetry_freshness_under_loss",
+      "mode": "quantitative_reliability",
+      "summary": "Estimate observation notification delivery and freshness under bounded loss, ACK, retransmission, and Reset behavior.",
+      "keywords": [
+        "telemetry",
+        "fresh",
+        "freshness",
+        "observation",
+        "notification",
+        "packet loss",
+        "loss",
+        "retransmission",
+        "reset",
+        "lan"
+      ],
+      "selected_profiles": [
+        "observation-long-lived-reset-smc"
+      ],
+      "query_selection": [
+        {
+          "profile": "observation-long-lived-reset-smc",
+          "queries": [
+            "notification_delivery",
+            "bounded_cycle_completion_probability",
+            "reset_probability",
+            "expected_received",
+            "expected_lost"
+          ]
+        }
+      ],
+      "parameters": {
+        "oscore_enabled": true,
+        "retransmission_enabled": true,
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "freshness_deadline_profile": "bounded_control_monitoring",
+        "observation_reset_enabled": true
+      }
+    },
+    {
+      "intent": "onboarding_reliability",
+      "mode": "quantitative_reliability",
+      "summary": "Estimate bootstrap and registration reliability under security overhead and stochastic communication.",
+      "keywords": [
+        "onboarding",
+        "bootstrap reliability",
+        "registration reliability",
+        "success probability",
+        "latency",
+        "security overhead",
+        "smc"
+      ],
+      "selected_profiles": [
+        "bootstrap-smc",
+        "registration-smc"
+      ],
+      "query_selection": [
+        {
+          "profile": "bootstrap-smc",
+          "queries": [
+            "bootstrap_success_probability",
+            "bootstrap_failure_probability",
+            "expected_retransmission_count",
+            "expected_config_loss_count"
+          ]
+        },
+        {
+          "profile": "registration-smc",
+          "queries": [
+            "registration_success_probability",
+            "registration_failure_probability",
+            "expected_retransmission_count",
+            "expected_lost_registration_messages"
+          ]
+        }
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "registration_update_enabled": true,
+        "lifetime_expiration_enabled": true
+      }
+    }
+  ]
+}

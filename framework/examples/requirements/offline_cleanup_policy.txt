@@ -1,0 +1,3 @@
+When a device explicitly deregisters or becomes abnormally offline, the server
+must clean up the stale session and revoke command authorization before any
+further management command can be accepted.

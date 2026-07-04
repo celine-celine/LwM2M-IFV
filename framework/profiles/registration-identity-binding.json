@@ -1,0 +1,41 @@
+{
+  "profile_id": "registration-identity-binding",
+  "procedure": "registration",
+  "lwm2m_version": "1.2",
+  "description": "Duplicate Endpoint / Identity Binding profile showing that a cloned device using an existing endpoint id is detected and rejected.",
+  "model": "framework/generated/registration/Registration_IdentityBinding.xml",
+  "security": {
+    "identity_binding_enabled": true,
+    "duplicate_endpoint_detection_enabled": true,
+    "command_authorization_requires_identity_binding": true
+  },
+  "attacker": {
+    "cloned_device_enabled": true,
+    "duplicate_endpoint_id": 0,
+    "attack_success_expected": false
+  },
+  "registration": {
+    "clients": 2,
+    "legitimate_client": 0,
+    "clone_client": 1,
+    "legitimate_secret": 321,
+    "clone_secret": 999
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "legitimate_registration_reachable": 1,
+    "duplicate_endpoint_rejected": 2,
+    "duplicate_endpoint_implies_attack": 3,
+    "clone_cannot_register": 4,
+    "legitimate_owner_preserved": 5,
+    "clone_not_authorized": 6,
+    "commands_require_identity_binding": 7
+  },
+  "primary_query": "duplicate_endpoint_rejected",
+  "industrial_properties": [
+    "cloned_device_detection",
+    "identity_preserving_admission",
+    "endpoint_owner_preservation",
+    "command_authorization_requires_identity_binding"
+  ]
+}

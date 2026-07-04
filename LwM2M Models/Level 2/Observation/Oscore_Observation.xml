@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// 系统规模
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+// 客户端状态（保留Level1中的Observation相关状态）
+const int CLIENT_STATE_REGISTERED = 5;
+const int CLIENT_STATE_OBSERVING = 6;
+const int CLIENT_STATE_NOTIFYING = 7;
+
+// 攻击模式
+const int NO_ATTACK = 0;
+const int TAMPER_NOTIFY = 1;   // 篡改通知内容
+const int REPLAY_NOTIFY = 2;
+
+int attack_mode = NO_ATTACK;
+
+// 简化Bootstrap/Registration：假设已完成
+bool client_registered[MAX_CLIENTS];   // 初始化为true
+int bootstrap_completed_count = MAX_CLIENTS;  // 假设已完成
+int registration_completed_count = MAX_CLIENTS;
+
+// Observation相关通道（与Level1一致）
+chan observe_start[MAX_CLIENTS];
+chan observe_stop[MAX_CLIENTS];
+chan notification[MAX_CLIENTS];
+
+// 攻击者专用通道（用于拦截和篡改）
+chan client_to_attacker_notify[MAX_CLIENTS];
+chan attacker_to_server_notify[MAX_CLIENTS];
+
+// 共享变量
+int client_state[MAX_CLIENTS];
+bool client_observed[MAX_CLIENTS];
+int notification_count = 0;
+int observation_cycle_count = 0;
+bool observation_in_progress = false;
+bool observation_completed = false;
+
+// 资源值模拟
+int resource_value[MAX_CLIENTS][4];
+int observed_resource[MAX_CLIENTS];
+
+// 通知阈值等（简化）
+const int NOTIFICATION_THRESHOLD = 2;
+const int MAX_OBSERVATION_CYCLES = 2;
+
+// 篡改攻击变量
+bool notification_tampered[MAX_CLIENTS];
+int tampered_value[MAX_CLIENTS];
+const int NORMAL_THRESHOLD = 2;      // 正常阈值
+const int TAMPERED_THRESHOLD = 5;    // 篡改后的阈值（例如，使客户端误以为未达到触发条件）
+
+// 观察周期计数
+int client_observation_count[MAX_CLIENTS];
+
+// 简化：假设资源值初始为0
+bool notification_recorded[MAX_CLIENTS];    // 是否已记录通知
+int recorded_value[MAX_CLIENTS];            // 记录的通知值（如有）
+int replay_count = 0;
+const int MAX_REPLAY = 3;                    // 最大重放次数
+
+chan client_to_attacker_notify_replay[MAX_CLIENTS];
+chan attacker_to_server_replay[MAX_CLIENTS];
+
+// OSCORE保护标志
+bool oscore_enabled = true;   // 设为true表示启用OSCORE，可手动切换以对比效果
+int seq_num[MAX_CLIENTS];     // 客户端序列号，初始为0（用于模拟序列号递增）
+int expected_seq[MAX_CLIENTS];
+int oscore_attack_blocked = 0; // OSCORE阻止的攻击次数（可选，用于验证）
+</declaration>
+	<template>
+		<name x="5" y="5">ObservationHandler</name>
+		<declaration>int selected_client = -1;
+int observation_attempts = 0;</declaration>
+		<location id="id0" x="-671" y="-306">
+			<name x="-681" y="-340">S_IDLE</name>
+		</location>
+		<location id="id1" x="-280" y="-306">
+			<name x="-331" y="-365">S_CLIENT_SELECTION</name>
+			<committed/>
+		</location>
+		<location id="id2" x="195" y="-306">
+			<name x="185" y="-340">S_STARTING_OBSERVE</name>
+		</location>
+		<location id="id3" x="535" y="-306">
+			<name x="525" y="-340">S_WAITING_NOTIFICATION</name>
+		</location>
+		<location id="id4" x="535" y="-476">
+			<name x="525" y="-510">S_STOPPING_OBSERVE</name>
+		</location>
+		<location id="id5" x="-280" y="-59">
+			<name x="-290" y="-93">S_COMPLETED</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="834" y="-467">attack_mode == REPLAY_NOTIFY &amp;&amp;
+(!oscore_enabled || seq_num[selected_client] == expected_seq[selected_client])</label>
+			<label kind="synchronisation" x="833" y="-450">attacker_to_server_replay[selected_client]?</label>
+			<label kind="assignment" x="833" y="-433">observation_cycle_count = observation_cycle_count + 1,
+(oscore_enabled ? expected_seq[selected_client] = expected_seq[selected_client] + 1 : 0)</label>
+			<nail x="1011" y="-306"/>
+			<nail x="1011" y="-476"/>
+		</transition>
+		<transition id="id7">
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<nail x="-340" y="-127"/>
+			<nail x="-340" y="-17"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="510" y="-425">attack_mode == TAMPER_NOTIFY &amp;&amp;
+(!oscore_enabled || seq_num[selected_client] == expected_seq[selected_client])</label>
+			<label kind="synchronisation" x="510" y="-408">attacker_to_server_notify[selected_client]?</label>
+			<label kind="assignment" x="510" y="-391">observation_cycle_count = observation_cycle_count + 1,
+(oscore_enabled ? expected_seq[selected_client] = expected_seq[selected_client] + 1 : 0)</label>
+			<nail x="790" y="-306"/>
+			<nail x="790" y="-476"/>
+		</transition>
+		<transition id="id9">
+			<source ref="id4"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-262" y="-586">observe_stop[selected_client]!</label>
+			<nail x="535" y="-569"/>
+			<nail x="-280" y="-569"/>
+		</transition>
+		<transition id="id10">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-144" y="-476">attack_mode == NO_ATTACK &amp;&amp;
+(!oscore_enabled || seq_num[selected_client] == expected_seq[selected_client])</label>
+			<label kind="synchronisation" x="-144" y="-442">notification[selected_client]?</label>
+			<label kind="assignment" x="-144" y="-425">observation_cycle_count = observation_cycle_count + 1,
+(oscore_enabled ? expected_seq[selected_client] = expected_seq[selected_client] + 1 : 0)</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="213" y="-323">observe_start[selected_client]!</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id1"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-280" y="-195">observation_attempts &gt;= MAX_OBSERVATION_CYCLES</label>
+			<label kind="assignment" x="-280" y="-161">observation_in_progress = false,
+observation_completed = true</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-262" y="-340">observation_attempts &lt; MAX_OBSERVATION_CYCLES</label>
+			<label kind="assignment" x="-262" y="-306">selected_client = observation_attempts % MAX_CLIENTS,
+observation_attempts = observation_attempts + 1,
+client_observation_count[selected_client] = client_observation_count[selected_client] + 1</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-654" y="-340">registration_completed_count == MAX_CLIENTS</label>
+			<label kind="assignment" x="-653" y="-306">observation_in_progress = true,
+observation_attempts = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>Attacker_Replay</name>
+		<parameter>const client_id_t target_id</parameter>
+		<declaration>bool recorded = false;
+int replay_delay = 0;
+const int REPLAY_DELAY_MAX = 3;</declaration>
+		<location id="id15" x="-688" y="-331">
+			<name x="-698" y="-365">S_IDLE</name>
+		</location>
+		<location id="id16" x="-280" y="-331">
+			<name x="-290" y="-365">S_RECORDING</name>
+		</location>
+		<location id="id17" x="-34" y="-331">
+			<name x="-44" y="-365">S_WAITING</name>
+		</location>
+		<location id="id18" x="348" y="-331">
+			<name x="338" y="-365">S_REPLAYING</name>
+		</location>
+		<init ref="id15"/>
+		<transition id="id19">
+			<source ref="id17"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-518" y="-450">oscore_enabled</label>
+			<label kind="assignment" x="-518" y="-433">recorded = false,
+oscore_attack_blocked = oscore_attack_blocked + 1</label>
+			<nail x="-382" y="-535"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<nail x="-748" y="-357"/>
+			<nail x="-748" y="-289"/>
+		</transition>
+		<transition id="id21">
+			<source ref="id18"/>
+			<target ref="id15"/>
+			<label kind="assignment" x="-670" y="-136">recorded = false</label>
+			<nail x="348" y="-136"/>
+			<nail x="-688" y="-136"/>
+		</transition>
+		<transition id="id22">
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="guard" x="-16" y="-365">replay_delay &gt;= REPLAY_DELAY_MAX &amp;&amp; !oscore_enabled</label>
+			<label kind="synchronisation" x="-16" y="-348">attacker_to_server_replay[target_id]!</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id17"/>
+			<target ref="id17"/>
+			<label kind="guard" x="-50" y="-492">replay_delay &lt; REPLAY_DELAY_MAX</label>
+			<label kind="assignment" x="-50" y="-458">replay_delay = replay_delay + 1</label>
+			<nail x="-68" y="-458"/>
+			<nail x="8" y="-458"/>
+		</transition>
+		<transition id="id24">
+			<source ref="id16"/>
+			<target ref="id17"/>
+			<label kind="assignment" x="-262" y="-331">replay_delay = 0</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="guard" x="-670" y="-365">attack_mode == REPLAY_NOTIFY &amp;&amp; !recorded</label>
+			<label kind="synchronisation" x="-670" y="-348">client_to_attacker_notify_replay[target_id]?</label>
+			<label kind="assignment" x="-670" y="-331">recorded = true,
+replay_count = replay_count + 1</label>
+		</transition>
+	</template>
+	<template>
+		<name>Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>int notification_sent = false;
+int observation_counter = 0;</declaration>
+		<location id="id26" x="-1164" y="-501">
+			<name x="-1174" y="-535">S_REGISTERED</name>
+		</location>
+		<location id="id27" x="-680" y="-501">
+			<name x="-690" y="-535">S_OBSERVING</name>
+		</location>
+		<location id="id28" x="-680" y="-263">
+			<name x="-690" y="-297">S_NOTIFYING</name>
+		</location>
+		<init ref="id26"/>
+		<transition id="id29">
+			<source ref="id28"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-662" y="-9">attack_mode == REPLAY_NOTIFY</label>
+			<label kind="synchronisation" x="-662" y="8">client_to_attacker_notify_replay[id]!</label>
+			<label kind="assignment" x="-662" y="25">notification_sent = true,
+notification_count = notification_count + 1,
+client_state[id] = CLIENT_STATE_OBSERVING,
+seq_num[id] = seq_num[id] + 1</label>
+			<nail x="-680" y="25"/>
+			<nail x="-246" y="25"/>
+			<nail x="-246" y="-501"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id28"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-662" y="-187">attack_mode == TAMPER_NOTIFY</label>
+			<label kind="synchronisation" x="-662" y="-170">client_to_attacker_notify[id]!</label>
+			<label kind="assignment" x="-662" y="-153">notification_sent = true,
+notification_count = notification_count + 1,
+client_state[id] = CLIENT_STATE_OBSERVING,
+seq_num[id] = seq_num[id] + 1</label>
+			<nail x="-680" y="-153"/>
+			<nail x="-246" y="-153"/>
+			<nail x="-246" y="-501"/>
+		</transition>
+		<transition id="id31">
+			<source ref="id27"/>
+			<target ref="id26"/>
+			<label kind="synchronisation" x="-1207" y="-382">observe_stop[id]?</label>
+			<label kind="assignment" x="-1207" y="-365">client_observed[id] = false,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+			<nail x="-909" y="-306"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id28"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-637" y="-297">attack_mode == NO_ATTACK</label>
+			<label kind="synchronisation" x="-603" y="-280">notification[id]!</label>
+			<label kind="assignment" x="-662" y="-263">notification_sent = true,
+notification_count = notification_count + 1,
+client_state[id] = CLIENT_STATE_OBSERVING,
+seq_num[id] = seq_num[id] + 1</label>
+			<nail x="-391" y="-263"/>
+			<nail x="-391" y="-501"/>
+		</transition>
+		<transition id="id33">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-1292" y="-323">resource_value[id][observed_resource[id]] &gt;= NOTIFICATION_THRESHOLD
+&amp;&amp;!notification_sent</label>
+			<label kind="assignment" x="-807" y="-365">client_state[id] = CLIENT_STATE_NOTIFYING</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id27"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-875" y="-765">resource_value[id][observed_resource[id]] &lt; 10</label>
+			<label kind="assignment" x="-875" y="-731">observation_counter = observation_counter + 1,
+resource_value[id][observed_resource[id]] = 
+        (observation_counter % 2 == 0) ? 
+        resource_value[id][observed_resource[id]] + 1 : 
+        resource_value[id][observed_resource[id]]</label>
+			<nail x="-765" y="-629"/>
+			<nail x="-595" y="-629"/>
+		</transition>
+		<transition id="id35">
+			<source ref="id26"/>
+			<target ref="id27"/>
+			<label kind="synchronisation" x="-1146" y="-518">observe_start[id]?</label>
+			<label kind="assignment" x="-1146" y="-501">client_observed[id] = true,
+observation_counter = 0,
+notification_sent = false,
+observed_resource[id] = id % 4,
+client_state[id] = CLIENT_STATE_OBSERVING</label>
+		</transition>
+		<transition id="id36">
+			<source ref="id26"/>
+			<target ref="id26"/>
+			<label kind="assignment" x="-1589" y="-612">client_state[id] = CLIENT_STATE_REGISTERED,
+client_registered[id] = true,
+client_observed[id] = false,
+notification_sent = false,
+observation_counter = 0,
+resource_value[id][0] = 0, // 简化
+resource_value[id][1] = 0,
+resource_value[id][2] = 0,
+resource_value[id][3] = 0,
+seq_num[id] = 0</label>
+			<nail x="-1317" y="-612"/>
+			<nail x="-1317" y="-399"/>
+		</transition>
+	</template>
+	<template>
+		<name>Attacker_Tamper</name>
+		<parameter>const client_id_t target_id</parameter>
+		<declaration>bool active = false;
+int delay = 0;
+const int DELAY_MAX = 2;</declaration>
+		<location id="id37" x="-637" y="-331">
+			<name x="-647" y="-365">S_IDLE</name>
+		</location>
+		<location id="id38" x="-323" y="-331">
+			<name x="-333" y="-365">S_INTERCEPTING</name>
+		</location>
+		<location id="id39" x="-17" y="-331">
+			<name x="-27" y="-365">S_TAMPERING</name>
+		</location>
+		<location id="id40" x="238" y="-331">
+			<name x="228" y="-365">S_FORWARDING</name>
+		</location>
+		<init ref="id37"/>
+		<transition id="id41">
+			<source ref="id39"/>
+			<target ref="id37"/>
+			<label kind="guard" x="-459" y="-467">oscore_enabled</label>
+			<label kind="assignment" x="-459" y="-450">active = false,
+oscore_attack_blocked = oscore_attack_blocked + 1</label>
+			<nail x="-297" y="-561"/>
+		</transition>
+		<transition id="id42">
+			<source ref="id37"/>
+			<target ref="id37"/>
+			<nail x="-722" y="-399"/>
+			<nail x="-722" y="-272"/>
+		</transition>
+		<transition id="id43">
+			<source ref="id40"/>
+			<target ref="id37"/>
+			<label kind="assignment" x="-619" y="-119">active = false</label>
+			<nail x="238" y="-119"/>
+			<nail x="-637" y="-119"/>
+		</transition>
+		<transition id="id44">
+			<source ref="id39"/>
+			<target ref="id40"/>
+			<label kind="guard" x="1" y="-365">delay &gt;= DELAY_MAX&amp;&amp; !oscore_enabled</label>
+			<label kind="synchronisation" x="1" y="-348">attacker_to_server_notify[target_id]!</label>
+			<label kind="assignment" x="1" y="-331">notification_tampered[target_id] = true</label>
+		</transition>
+		<transition id="id45">
+			<source ref="id39"/>
+			<target ref="id39"/>
+			<label kind="guard" x="-84" y="-446">delay &lt; DELAY_MAX</label>
+			<label kind="assignment" x="-84" y="-412">delay = delay + 1</label>
+			<nail x="-102" y="-493"/>
+			<nail x="76" y="-493"/>
+		</transition>
+		<transition id="id46">
+			<source ref="id38"/>
+			<target ref="id39"/>
+			<label kind="assignment" x="-305" y="-331">delay = 0</label>
+		</transition>
+		<transition id="id47">
+			<source ref="id37"/>
+			<target ref="id38"/>
+			<label kind="guard" x="-619" y="-365">attack_mode == TAMPER_NOTIFY &amp;&amp; !active</label>
+			<label kind="synchronisation" x="-619" y="-348">client_to_attacker_notify[target_id]?</label>
+			<label kind="assignment" x="-619" y="-331">active = true</label>
+		</transition>
+	</template>
+	<system>Client1 = Client(0);
+Client2 = Client(1);
+ObservationHandler1 = ObservationHandler();
+Attacker_Tamper0 = Attacker_Tamper(0);
+Attacker_Tamper1 = Attacker_Tamper(1);
+//Attacker_Replay0 = Attacker_Replay(0);
+//Attacker_Replay1 = Attacker_Replay(1);
+
+
+system Client1, Client2, ObservationHandler1,
+Attacker_Tamper0, Attacker_Tamper1;
+//Attacker_Replay0, Attacker_Replay1;
+</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 21:53:07 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; attack_mode == NO_ATTACK and ObservationHandler1.S_COMPLETED
+</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 14:22:14 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// TAMPER</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; attack_mode == TAMPER_NOTIFY and (notification_tampered[0] or notification_tampered[1])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 14:22:57 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; attack_mode == TAMPER_NOTIFY and ObservationHandler1.S_COMPLETED</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 14:23:09 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// REPLAY</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == REPLAY_NOTIFY and replay_count &gt; 0)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 21:33:12 +0800">
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>//OSCORE ENABLED</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>A[] (oscore_enabled imply !(notification_tampered[0] or notification_tampered[1]))
+</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:45:42 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (oscore_enabled imply replay_count == 0)
+</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:45:44 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (oscore_enabled and attack_mode == NO_ATTACK and ObservationHandler1.S_COMPLETED)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:46:13 +0800">
+			</result>
+		</query>
+	</queries>
+</nta>

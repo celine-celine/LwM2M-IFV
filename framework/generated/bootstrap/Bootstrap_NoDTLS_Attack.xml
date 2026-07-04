@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Bootstrap no-DTLS attack profile model.
+// The model abstracts LwM2M Bootstrap as:
+// Client request -> credential/config provisioning -> client-side config verification.
+
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAPPING = 1;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 2;
+const int CLIENT_STATE_ERROR = 12;
+
+const int NORMAL_CONFIG = 100;
+const int TAMPERED_CONFIG = 999;
+const int FAKE_CONFIG = 666;
+
+const bool DTLS_ENABLED = false;
+const bool MITM_ENABLED = true;
+const bool FAKE_BS_ENABLED = true;
+const bool ATTACK_PROFILE = true;
+
+chan bootstrap_request[MAX_CLIENTS];
+chan bootstrap_config[MAX_CLIENTS];
+chan fake_bs_config[MAX_CLIENTS];
+chan mitm_tampered_config[MAX_CLIENTS];
+
+int client_state[MAX_CLIENTS];
+bool client_bootstrapped[MAX_CLIENTS];
+bool client_error[MAX_CLIENTS];
+bool config_verified[MAX_CLIENTS];
+bool fake_config_received[MAX_CLIENTS];
+bool message_tampered[MAX_CLIENTS];
+bool dtls_established[MAX_CLIENTS];
+int received_config[MAX_CLIENTS];
+int bootstrap_completed_count = 0;
+</declaration>
+	<template>
+		<name x="5" y="5">BootstrapServer</name>
+		<declaration>int current_client = 0;</declaration>
+		<location id="id0" x="-820" y="-340">
+			<name x="-830" y="-374">S_IDLE</name>
+		</location>
+		<location id="id1" x="-560" y="-340">
+			<name x="-620" y="-374">S_SELECT_CLIENT</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-300" y="-340">
+			<name x="-360" y="-374">S_WAIT_REQUEST</name>
+		</location>
+		<location id="id3" x="-20" y="-340">
+			<name x="-80" y="-374">S_SEND_CONFIG</name>
+			<committed/>
+		</location>
+		<location id="id4" x="-560" y="-100">
+			<name x="-570" y="-134">S_ALL_COMPLETE</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-810" y="-320">current_client = 0</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-570" y="-210">current_client &gt;= MAX_CLIENTS</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-550" y="-400">current_client &lt; MAX_CLIENTS</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-290" y="-370">bootstrap_request[current_client]?</label>
+			<label kind="assignment" x="-290" y="-350">dtls_established[current_client] = DTLS_ENABLED</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id3"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-10" y="-390">!ATTACK_PROFILE</label>
+			<label kind="synchronisation" x="-10" y="-370">bootstrap_config[current_client]!</label>
+			<label kind="assignment" x="-10" y="-350">current_client = current_client + 1</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id3"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-10" y="-300">ATTACK_PROFILE</label>
+			<label kind="assignment" x="-10" y="-280">current_client = current_client + 1</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<nail x="-620" y="-40"/>
+			<nail x="-500" y="-40"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id11" x="-820" y="120">
+			<name x="-830" y="86">S_INIT</name>
+		</location>
+		<location id="id12" x="-540" y="120">
+			<name x="-580" y="86">S_BOOTSTRAPPING</name>
+		</location>
+		<location id="id13" x="-220" y="120">
+			<name x="-260" y="86">S_VERIFY_CONFIG</name>
+			<committed/>
+		</location>
+		<location id="id14" x="100" y="40">
+			<name x="90" y="6">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id15" x="100" y="220">
+			<name x="90" y="186">S_ERROR</name>
+		</location>
+		<init ref="id11"/>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-800" y="90">bootstrap_request[id]!</label>
+			<label kind="assignment" x="-800" y="110">client_state[id] = CLIENT_STATE_BOOTSTRAPPING</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-520" y="70">bootstrap_config[id]?</label>
+			<label kind="assignment" x="-520" y="90">received_config[id] = NORMAL_CONFIG</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="-520" y="170">!DTLS_ENABLED</label>
+			<label kind="synchronisation" x="-520" y="190">fake_bs_config[id]?</label>
+			<label kind="assignment" x="-520" y="210">received_config[id] = FAKE_CONFIG,
+fake_config_received[id] = true</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="guard" x="-520" y="280">!DTLS_ENABLED</label>
+			<label kind="synchronisation" x="-520" y="300">mitm_tampered_config[id]?</label>
+			<label kind="assignment" x="-520" y="320">received_config[id] = TAMPERED_CONFIG,
+message_tampered[id] = true</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="guard" x="-170" y="40">received_config[id] == NORMAL_CONFIG</label>
+			<label kind="assignment" x="-170" y="60">config_verified[id] = true,
+client_bootstrapped[id] = true,
+client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+bootstrap_completed_count = bootstrap_completed_count + 1</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id13"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-170" y="220">received_config[id] != NORMAL_CONFIG</label>
+			<label kind="assignment" x="-170" y="240">client_error[id] = true,
+client_state[id] = CLIENT_STATE_ERROR</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id14"/>
+			<target ref="id14"/>
+			<nail x="40" y="-20"/>
+			<nail x="160" y="-20"/>
+		</transition>
+		<transition id="id23">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<nail x="40" y="280"/>
+			<nail x="160" y="280"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">FakeBootstrapServer</name>
+		<parameter>const client_id_t target_id</parameter>
+		<location id="id24" x="-360" y="460">
+			<name x="-370" y="426">S_IDLE</name>
+		</location>
+		<location id="id25" x="-80" y="460">
+			<name x="-90" y="426">S_SEND_FAKE_CONFIG</name>
+			<committed/>
+		</location>
+		<init ref="id24"/>
+		<transition id="id26">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="guard" x="-350" y="410">FAKE_BS_ENABLED &amp;&amp; !DTLS_ENABLED &amp;&amp;
+client_state[target_id] == CLIENT_STATE_BOOTSTRAPPING</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id25"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-70" y="430">fake_bs_config[target_id]!</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">MitmTamper</name>
+		<parameter>const client_id_t target_id</parameter>
+		<location id="id28" x="260" y="460">
+			<name x="250" y="426">S_IDLE</name>
+		</location>
+		<location id="id29" x="540" y="460">
+			<name x="530" y="426">S_SEND_TAMPERED_CONFIG</name>
+			<committed/>
+		</location>
+		<init ref="id28"/>
+		<transition id="id30">
+			<source ref="id28"/>
+			<target ref="id29"/>
+			<label kind="guard" x="270" y="410">MITM_ENABLED &amp;&amp; !DTLS_ENABLED &amp;&amp;
+client_state[target_id] == CLIENT_STATE_BOOTSTRAPPING</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id29"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="550" y="430">mitm_tampered_config[target_id]!</label>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+Client1 = Client(1);
+BootstrapServer1 = BootstrapServer();
+FakeBS0 = FakeBootstrapServer(0);
+FakeBS1 = FakeBootstrapServer(1);
+Mitm0 = MitmTamper(0);
+Mitm1 = MitmTamper(1);
+
+system Client0, Client1, BootstrapServer1, FakeBS0, FakeBS1, Mitm0, Mitm1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.S_BOOTSTRAP_DONE and Client1.S_BOOTSTRAP_DONE</formula>
+			<comment>Both clients can complete Bootstrap with valid configuration.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (client_bootstrapped[c] imply config_verified[c])</formula>
+			<comment>A bootstrapped client must have verified its configuration.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (fake_config_received[c] and client_state[c] != CLIENT_STATE_BOOTSTRAPPING imply client_error[c])</formula>
+			<comment>Fake bootstrap configuration is rejected after verification.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (message_tampered[c] and client_state[c] != CLIENT_STATE_BOOTSTRAPPING imply client_error[c])</formula>
+			<comment>Tampered configuration is rejected after verification.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (DTLS_ENABLED imply !(fake_config_received[c] or message_tampered[c]))</formula>
+			<comment>DTLS profile blocks fake and tampered configuration paths.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; fake_config_received[0] and client_error[0]</formula>
+			<comment>Without DTLS, fake Bootstrap configuration is reachable and rejected.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; message_tampered[0] and client_error[0]</formula>
+			<comment>Without DTLS, MITM-tampered configuration is reachable and rejected.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (client_bootstrapped[c] imply received_config[c] == NORMAL_CONFIG)</formula>
+			<comment>Even without DTLS, only valid configuration can lead to successful bootstrap.</comment>
+		</query>	</queries>
+</nta>

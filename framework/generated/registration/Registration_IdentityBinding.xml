@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Duplicate Endpoint / Identity Binding profile model.
+// The model abstracts a cloned-device attempt: Client0 is the legitimate
+// endpoint owner, while Client1 presents the same endpoint id with a mismatched
+// identity secret. The server must reject the clone and preserve ownership.
+
+const int MAX_CLIENTS = 2;
+const int ENDPOINT_COUNT = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+typedef int[0, ENDPOINT_COUNT-1] endpoint_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTERED = 3;
+const int CLIENT_STATE_REJECTED = 4;
+
+const int DUPLICATE_ENDPOINT_ID = 0;
+const int OWNER_NONE = 0;
+const int OWNER_CLIENT0 = 1;
+const int OWNER_CLIENT1 = 2;
+
+const int LEGIT_SECRET = 321;
+const int CLONE_SECRET = 999;
+
+const bool IDENTITY_BINDING_ENABLED = true;
+const bool DUPLICATE_ENDPOINT_DETECTION_ENABLED = true;
+
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan register_reject[MAX_CLIENTS];
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool object_list_received[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_rejected[MAX_CLIENTS];
+bool command_authorized[MAX_CLIENTS];
+bool clone_device[MAX_CLIENTS];
+bool identity_binding_verified[MAX_CLIENTS];
+bool duplicate_endpoint_detected = false;
+bool identity_mismatch_detected = false;
+bool cloned_device_detected = false;
+bool attack_detected = false;
+int client_state[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+int endpoint_id[MAX_CLIENTS];
+int provisioned_identity_secret[MAX_CLIENTS];
+int presented_identity_secret[MAX_CLIENTS];
+int owner_code[MAX_CLIENTS];
+int server_session_owner[ENDPOINT_COUNT];
+int registration_turn = 0;
+int current_client = 0;
+</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id0" x="-760" y="80">
+			<name x="-770" y="46">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id1" x="-460" y="80">
+			<name x="-520" y="46">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-160" y="80">
+			<name x="-220" y="46">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id3" x="140" y="80">
+			<name x="90" y="46">S_WAIT_RESULT</name>
+		</location>
+		<location id="id4" x="440" y="0">
+			<name x="400" y="-34">S_REGISTERED</name>
+		</location>
+		<location id="id5" x="440" y="180">
+			<name x="400" y="146">S_REJECTED</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="20">bootstrap_completed[id] &amp;&amp; id == registration_turn</label>
+			<label kind="assignment" x="-750" y="40">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-450" y="50">register_start[id]!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-150" y="50">register_objects[id]!</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="150" y="0">register_ack[id]?</label>
+			<label kind="assignment" x="150" y="20">client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="150" y="170">register_reject[id]?</label>
+			<label kind="assignment" x="150" y="190">registration_rejected[id] = true,
+client_state[id] = CLIENT_STATE_REJECTED</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<nail x="380" y="-60"/>
+			<nail x="500" y="-60"/>
+		</transition>
+		<transition id="id12">
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<nail x="380" y="240"/>
+			<nail x="500" y="240"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<location id="id13" x="-760" y="-340">
+			<name x="-770" y="-374">S_INIT</name>
+			<committed/>
+		</location>
+		<location id="id14" x="-500" y="-340">
+			<name x="-560" y="-374">S_SELECT_CLIENT</name>
+			<committed/>
+		</location>
+		<location id="id15" x="-220" y="-340">
+			<name x="-280" y="-374">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id16" x="60" y="-340">
+			<name x="0" y="-374">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id17" x="340" y="-340">
+			<name x="280" y="-374">S_VALIDATE_IDENTITY</name>
+			<committed/>
+		</location>
+		<location id="id18" x="640" y="-460">
+			<name x="580" y="-494">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id19" x="640" y="-220">
+			<name x="580" y="-254">S_SEND_REJECT</name>
+			<committed/>
+		</location>
+		<location id="id20" x="-500" y="-100">
+			<name x="-540" y="-134">S_DONE</name>
+		</location>
+		<init ref="id13"/>
+		<transition id="id21">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="-750" y="-320">bootstrap_completed[0] = true,
+bootstrap_completed[1] = true,
+client_state[0] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+client_state[1] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+endpoint_id[0] = DUPLICATE_ENDPOINT_ID,
+endpoint_id[1] = DUPLICATE_ENDPOINT_ID,
+provisioned_identity_secret[0] = LEGIT_SECRET,
+provisioned_identity_secret[1] = LEGIT_SECRET,
+presented_identity_secret[0] = LEGIT_SECRET,
+presented_identity_secret[1] = CLONE_SECRET,
+owner_code[0] = OWNER_CLIENT0,
+owner_code[1] = OWNER_CLIENT1,
+clone_device[1] = true,
+current_client = 0,
+registration_turn = 0</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id14"/>
+			<target ref="id20"/>
+			<label kind="guard" x="-510" y="-210">current_client &gt;= MAX_CLIENTS</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-490" y="-400">current_client &lt; MAX_CLIENTS</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="synchronisation" x="-210" y="-370">register_start[current_client]?</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id16"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="70" y="-370">register_objects[current_client]?</label>
+			<label kind="assignment" x="70" y="-350">object_list_received[current_client] = true</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="guard" x="340" y="-520">(!IDENTITY_BINDING_ENABLED ||
+presented_identity_secret[current_client] == provisioned_identity_secret[current_client]) &amp;&amp;
+(!DUPLICATE_ENDPOINT_DETECTION_ENABLED ||
+server_session_owner[endpoint_id[current_client]] == OWNER_NONE)</label>
+			<label kind="assignment" x="340" y="-470">identity_binding_verified[current_client] = true,
+server_session_owner[endpoint_id[current_client]] = owner_code[current_client],
+server_last_msg_id[current_client] = client_message_id[current_client],
+command_authorized[current_client] = true</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id17"/>
+			<target ref="id19"/>
+			<label kind="guard" x="340" y="-260">(IDENTITY_BINDING_ENABLED &amp;&amp;
+presented_identity_secret[current_client] != provisioned_identity_secret[current_client]) ||
+(DUPLICATE_ENDPOINT_DETECTION_ENABLED &amp;&amp;
+server_session_owner[endpoint_id[current_client]] != OWNER_NONE)</label>
+			<label kind="assignment" x="340" y="-210">duplicate_endpoint_detected =
+server_session_owner[endpoint_id[current_client]] != OWNER_NONE,
+identity_mismatch_detected =
+presented_identity_secret[current_client] != provisioned_identity_secret[current_client],
+cloned_device_detected = clone_device[current_client],
+attack_detected = true,
+command_authorized[current_client] = false</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id18"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="650" y="-430">register_ack[current_client]!</label>
+			<label kind="assignment" x="650" y="-410">current_client = current_client + 1,
+registration_turn = registration_turn + 1</label>
+		</transition>
+		<transition id="id29">
+			<source ref="id19"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="650" y="-190">register_reject[current_client]!</label>
+			<label kind="assignment" x="650" y="-170">current_client = current_client + 1,
+registration_turn = registration_turn + 1</label>
+		</transition>
+		<transition id="id30">
+			<source ref="id20"/>
+			<target ref="id20"/>
+			<nail x="-560" y="-40"/>
+			<nail x="-440" y="-40"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+Client1 = Client(1);
+RegistrationServer1 = RegistrationServer();
+
+system Client0, Client1, RegistrationServer1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom for identity-bound registration.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.S_REGISTERED and identity_binding_verified[0]</formula>
+			<comment>The legitimate endpoint owner can register.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; duplicate_endpoint_detected and Client1.S_REJECTED</formula>
+			<comment>A cloned device using a duplicate endpoint is reachable and rejected.</comment>
+		</query>
+		<query>
+			<formula>A[] duplicate_endpoint_detected imply attack_detected</formula>
+			<comment>Duplicate endpoint detection raises an attack flag.</comment>
+		</query>
+		<query>
+			<formula>A[] duplicate_endpoint_detected imply !client_registered[1]</formula>
+			<comment>The cloned duplicate endpoint cannot become registered.</comment>
+		</query>
+		<query>
+			<formula>A[] client_registered[0] imply server_session_owner[endpoint_id[0]] == OWNER_CLIENT0</formula>
+			<comment>The legitimate device owns its endpoint session after registration.</comment>
+		</query>
+		<query>
+			<formula>A[] server_session_owner[DUPLICATE_ENDPOINT_ID] == OWNER_CLIENT0 imply !command_authorized[1]</formula>
+			<comment>The clone cannot receive command authorization after the legitimate owner is bound.</comment>
+		</query>
+		<query>
+			<formula>A[] command_authorized[0] imply identity_binding_verified[0] and server_session_owner[endpoint_id[0]] == OWNER_CLIENT0</formula>
+			<comment>Command authorization for the legitimate device requires successful identity binding and preserved endpoint ownership.</comment>
+		</query>
+	</queries>
+</nta>

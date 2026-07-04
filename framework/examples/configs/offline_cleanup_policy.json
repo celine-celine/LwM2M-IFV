@@ -1,0 +1,95 @@
+{
+  "requirement_id": "offline_cleanup_policy_demo",
+  "source_text": "When a device explicitly deregisters or becomes abnormally offline, the server must clean up the stale session and revoke command authorization before any further management command can be accepted.",
+  "analysis": {
+    "mode": "industrial_policy",
+    "intent": "offline_cleanup_policy"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "shop_floor_endpoint"
+      }
+    ],
+    "policy": "deregister_and_abnormal_offline_cleanup"
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Clean up explicit deregistration.",
+    "Clean up abnormal offline state.",
+    "Revoke command authorization after cleanup."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "Abnormal offline is represented by the bounded offline cleanup transition in the registration model."
+  ],
+  "profile_instances": [
+    {
+      "template": "registration_cleanup_template",
+      "profile": "registration-deregister-offline",
+      "queries": [
+        "deregister_reachable",
+        "offline_cleanup_reachable",
+        "deregister_removes_session",
+        "offline_cleanup_removes_session",
+        "deregister_disables_commands",
+        "offline_cleanup_disables_commands"
+      ],
+      "parameters": {
+        "deregister_enabled": true,
+        "abnormal_offline_enabled": true,
+        "cleanup_policy_enabled": true
+      }
+    },
+    {
+      "template": "industrial_policy_monitor_template",
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "deregister_cleanup_reachable",
+        "offline_cleanup_reachable",
+        "cleanup_revokes_authorization"
+      ],
+      "parameters": {
+        "command_authorization_revoked_on_cleanup": true
+      }
+    }
+  ],
+  "selected_profiles": [
+    "registration-deregister-offline",
+    "industrial-policy-binding-cleanup"
+  ],
+  "query_selection": [
+    {
+      "profile": "registration-deregister-offline",
+      "queries": [
+        "deregister_reachable",
+        "offline_cleanup_reachable",
+        "deregister_removes_session",
+        "offline_cleanup_removes_session",
+        "deregister_disables_commands",
+        "offline_cleanup_disables_commands"
+      ]
+    },
+    {
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "deregister_cleanup_reachable",
+        "offline_cleanup_reachable",
+        "cleanup_revokes_authorization"
+      ]
+    }
+  ],
+  "parameters": {
+    "deregister_enabled": true,
+    "abnormal_offline_enabled": true,
+    "cleanup_policy_enabled": true,
+    "command_authorization_revoked_on_cleanup": true
+  },
+  "assistant_notes": [
+    "The lifecycle profile checks explicit deregistration and abnormal offline cleanup.",
+    "The industrial policy profile checks that cleanup is reflected in command authorization."
+  ]
+}

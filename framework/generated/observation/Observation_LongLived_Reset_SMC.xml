@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Improved Observation flow model.
+// This generated model keeps a long-lived Observe relation across multiple Notify messages
+// and adds an abstract CoAP ACK/Reset response path.
+
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_REGISTERED = 5;
+const int CLIENT_STATE_OBSERVING = 6;
+const int CLIENT_STATE_NOTIFYING = 7;
+
+const int MAX_NOTIFICATIONS_PER_OBSERVATION = 2;
+const bool RESET_ENABLED = true;
+const double NOTIFICATION_RATE = 0.01;
+const int WEIGHT_NOTIFY_SUCCESS = 995;
+const int WEIGHT_NOTIFY_LOSS = 5;
+const int WEIGHT_ACK = 990;
+const int WEIGHT_RESET = 10;
+const int OBSERVATION_DEADLINE = 210000;
+
+int registration_completed_count = MAX_CLIENTS;
+
+broadcast chan observe_start[MAX_CLIENTS];
+broadcast chan observe_stop[MAX_CLIENTS];
+broadcast chan notification[MAX_CLIENTS];
+broadcast chan coap_ack[MAX_CLIENTS];
+broadcast chan coap_reset[MAX_CLIENTS];
+
+int client_state[MAX_CLIENTS];
+bool client_observed[MAX_CLIENTS];
+bool reset_received[MAX_CLIENTS];
+bool observation_completed = false;
+bool notification_pending[MAX_CLIENTS];
+
+int notification_sent[MAX_CLIENTS];
+int notification_received[MAX_CLIENTS];
+int notification_lost[MAX_CLIENTS];
+int ack_sent[MAX_CLIENTS];
+int reset_sent[MAX_CLIENTS];
+</declaration>
+	<template>
+		<name x="5" y="5">ObservationHandler</name>
+		<declaration>int current_client = 0;
+int selected_client = 0;
+int current_notifications = 0;
+clock t;</declaration>
+		<location id="id0" x="-779" y="-481">
+			<name x="-789" y="-515">S_IDLE</name>
+			<label kind="invariant" x="-789" y="-461">t &lt;= 0</label>
+		</location>
+		<location id="id1" x="-782" y="-297">
+			<name x="-842" y="-331">S_SELECT_CLIENT</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-467" y="-297">
+			<name x="-527" y="-331">S_START_OBSERVE</name>
+			<committed/>
+		</location>
+		<location id="id3" x="-204" y="-297">
+			<name x="-274" y="-331">S_WAIT_NOTIFY</name>
+			<label kind="invariant" x="-274" y="-277">t &lt;= OBSERVATION_DEADLINE</label>
+		</location>
+		<location id="id4" x="167" y="-294">
+			<name x="107" y="-328">S_DECIDE_RESPONSE</name>
+			<committed/>
+		</location>
+		<location id="id5" x="-68" y="-493">
+			<name x="-128" y="-527">S_SEND_ACK_CONTINUE</name>
+			<committed/>
+		</location>
+		<location id="id6" x="447" y="-294">
+			<name x="382" y="-331">S_SEND_ACK_CANCEL</name>
+			<committed/>
+		</location>
+		<location id="id7" x="450" y="-187">
+			<name x="390" y="-221">S_SEND_RESET</name>
+			<committed/>
+		</location>
+		<location id="id8" x="731" y="-297">
+			<name x="671" y="-331">S_CANCEL_OBSERVE</name>
+			<committed/>
+		</location>
+		<location id="id9" x="-782" y="-59">
+			<name x="-792" y="-93">S_COMPLETED</name>
+			<label kind="invariant" x="-792" y="-39">t &lt;= OBSERVATION_DEADLINE</label>
+		</location>
+		<branchpoint id="id100" x="305" y="-294"/>
+		<init ref="id0"/>
+		<transition id="id10">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-983" y="-472">registration_completed_count == MAX_CLIENTS</label>
+			<label kind="assignment" x="-983" y="-452">current_client = 0,
+t = 0</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id1"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-802" y="-185">current_client &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="-802" y="-165">observation_completed = true</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-756" y="-394">current_client &lt; MAX_CLIENTS</label>
+			<label kind="assignment" x="-756" y="-374">selected_client = current_client,
+current_notifications = 0,
+t = 0</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-459" y="-272">observe_start[selected_client]!</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-190" y="-350">notification_pending[selected_client]</label>
+			<label kind="assignment" x="-190" y="-310">notification_pending[selected_client] = false,
+current_notifications = current_notifications + 1,
+t = 0</label>
+		</transition>
+		<transition id="id36">
+			<source ref="id4"/>
+			<target ref="id100"/>
+		</transition>
+		<transition id="id15">
+			<source ref="id100"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-34" y="-467">current_notifications &lt; MAX_NOTIFICATIONS_PER_OBSERVATION</label>
+			<label kind="assignment" x="-25" y="-433">ack_sent[selected_client] = ack_sent[selected_client] + 1</label>
+			<label kind="probability" x="-26" y="-416">WEIGHT_ACK</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id5"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-34" y="-493">coap_ack[selected_client]!</label>
+			<label kind="assignment" x="-34" y="-473">t = 0</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id100"/>
+			<target ref="id6"/>
+			<label kind="guard" x="144" y="-408">current_notifications &gt;= MAX_NOTIFICATIONS_PER_OBSERVATION</label>
+			<label kind="assignment" x="144" y="-374">ack_sent[selected_client] = 
+ack_sent[selected_client] + 1</label>
+			<label kind="probability" x="144" y="-357">WEIGHT_ACK</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id6"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="447" y="-274">coap_ack[selected_client]!</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id100"/>
+			<target ref="id7"/>
+			<label kind="guard" x="238" y="-272">RESET_ENABLED</label>
+			<label kind="assignment" x="238" y="-255">reset_sent[selected_client] = 
+reset_sent[selected_client] + 1</label>
+			<label kind="probability" x="238" y="-238">WEIGHT_RESET</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id7"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="450" y="-187">coap_reset[selected_client]!</label>
+			<label kind="assignment" x="416" y="-178">current_client = current_client + 1,
+t = 0</label>
+			<nail x="731" y="-187"/>
+			<nail x="731" y="-76"/>
+			<nail x="-782" y="-85"/>
+		</transition>
+		<transition id="id21">
+			<source ref="id8"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="579" y="-266">observe_stop[selected_client]!</label>
+			<label kind="assignment" x="578" y="-246">current_client = current_client + 1,
+t = 0</label>
+			<nail x="731" y="-76"/>
+			<nail x="-782" y="-85"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id23" x="-760" y="180">
+			<name x="-770" y="146">S_REGISTERED</name>
+		</location>
+		<location id="id24" x="-460" y="180">
+			<name x="-470" y="146">S_OBSERVING</name>
+			<label kind="exponentialrate" x="-470" y="203">NOTIFICATION_RATE</label>
+		</location>
+		<location id="id25" x="-180" y="180">
+			<name x="-190" y="146">S_NOTIFYING</name>
+			<committed/>
+		</location>
+		<location id="id26" x="120" y="180">
+			<name x="110" y="146">S_WAIT_RESPONSE</name>
+		</location>
+		<location id="id102" x="40" y="60">
+			<name x="30" y="26">S_SEND_NOTIFY</name>
+			<committed/>
+		</location>
+		<branchpoint id="id101" x="-30" y="180"/>
+		<init ref="id23"/>
+		<transition id="id27">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-740" y="150">observe_start[id]?</label>
+			<label kind="assignment" x="-740" y="170">client_observed[id] = true,
+client_state[id] = CLIENT_STATE_OBSERVING</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="guard" x="-450" y="120">client_observed[id] &amp;&amp;
+notification_received[id] &lt; MAX_NOTIFICATIONS_PER_OBSERVATION</label>
+			<label kind="assignment" x="-450" y="140">client_state[id] = CLIENT_STATE_NOTIFYING</label>
+		</transition>
+		<transition id="id29">
+			<source ref="id25"/>
+			<target ref="id101"/>
+			<label kind="assignment" x="-160" y="170">notification_sent[id] = notification_sent[id] + 1</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id101"/>
+			<target ref="id102"/>
+			<label kind="probability" x="-40" y="140">WEIGHT_NOTIFY_SUCCESS</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id102"/>
+			<target ref="id26"/>
+			<label kind="assignment" x="40" y="90">notification_pending[id] = true,
+notification_received[id] = notification_received[id] + 1</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id101"/>
+			<target ref="id24"/>
+			<label kind="assignment" x="-40" y="220">notification_lost[id] = notification_lost[id] + 1,
+client_state[id] = CLIENT_STATE_OBSERVING</label>
+			<label kind="probability" x="-40" y="260">WEIGHT_NOTIFY_LOSS</label>
+			<nail x="-30" y="260"/>
+			<nail x="-460" y="260"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id26"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="120" y="110">coap_ack[id]?</label>
+			<label kind="assignment" x="120" y="130">client_state[id] = CLIENT_STATE_OBSERVING</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id26"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="120" y="230">coap_reset[id]?</label>
+			<label kind="assignment" x="120" y="250">reset_received[id] = true,
+client_observed[id] = false,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+			<nail x="120" y="300"/>
+			<nail x="-760" y="300"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id24"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="-760" y="230">observe_stop[id]?</label>
+			<label kind="assignment" x="-760" y="250">client_observed[id] = false,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+			<nail x="-460" y="300"/>
+			<nail x="-760" y="300"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+Client1 = Client(1);
+ObservationHandler1 = ObservationHandler();
+
+system Client0, Client1, ObservationHandler1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; ObservationHandler1.S_COMPLETED</formula>
+			<comment>The observation workflow can complete for all clients.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; notification_received[0] == MAX_NOTIFICATIONS_PER_OBSERVATION and !reset_received[0]</formula>
+			<comment>A long-lived observation can receive multiple notifications before cancellation.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; reset_received[0]</formula>
+			<comment>A CoAP Reset path is reachable.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (reset_received[c] imply !client_observed[c])</formula>
+			<comment>After Reset, the client is no longer observed.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) notification_received[c] &lt;= MAX_NOTIFICATIONS_PER_OBSERVATION</formula>
+			<comment>The bounded monitoring cycle caps notification count per client.</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=210000; 200] (&lt;&gt; notification_received[0] &gt; 0)</formula>
+			<comment>Probability that client 0 delivers at least one notification.</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=210000; 200] (&lt;&gt; notification_received[0] == MAX_NOTIFICATIONS_PER_OBSERVATION)</formula>
+			<comment>Probability that client 0 completes the bounded long-lived observation cycle.</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=210000; 200] (&lt;&gt; reset_received[0])</formula>
+			<comment>Probability that client 0 receives a CoAP Reset.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=210000; 200] (max: notification_received[0])</formula>
+			<comment>Expected maximum notifications received from client 0.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=210000; 200] (max: notification_lost[0])</formula>
+			<comment>Expected maximum lost notifications from client 0.</comment>
+		</query>
+	</queries>
+</nta>

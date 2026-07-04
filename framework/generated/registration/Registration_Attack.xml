@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Registration attack profile model.
+
+const int MAX_CLIENTS = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTERED = 4;
+const int CLIENT_STATE_ERROR = 5;
+
+const bool DTLS_ENABLED = false;
+const bool REPLAY_ENABLED = true;
+const bool DOS_ENABLED = true;
+const int MAX_DOS_ATTACKS = 2;
+
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan replay_register_start[MAX_CLIENTS];
+chan dos_register_start;
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool replay_message_detected = false;
+bool dos_throttling_active = false;
+bool attack_detected = false;
+bool server_waiting = false;
+int attack_counter = 0;
+int client_state[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id0" x="-760" y="80">
+			<name x="-770" y="46">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id1" x="-460" y="80">
+			<name x="-520" y="46">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-160" y="80">
+			<name x="-220" y="46">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id3" x="140" y="80">
+			<name x="90" y="46">S_WAIT_ACK</name>
+		</location>
+		<location id="id4" x="440" y="80">
+			<name x="430" y="46">S_REGISTERED</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="20">bootstrap_completed[id] &amp;&amp; server_waiting &amp;&amp; !dos_throttling_active</label>
+			<label kind="assignment" x="-750" y="40">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-450" y="50">register_start[id]!</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-150" y="50">register_objects[id]!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="150" y="50">register_ack[id]?</label>
+			<label kind="assignment" x="150" y="70">client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<nail x="380" y="20"/>
+			<nail x="500" y="20"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<location id="id10" x="-760" y="-320">
+			<name x="-770" y="-354">S_INIT</name>
+			<committed/>
+		</location>
+		<location id="id11" x="-460" y="-320">
+			<name x="-520" y="-354">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id12" x="-160" y="-320">
+			<name x="-220" y="-354">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id13" x="140" y="-320">
+			<name x="80" y="-354">S_VALIDATE</name>
+			<committed/>
+		</location>
+		<location id="id14" x="440" y="-320">
+			<name x="380" y="-354">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id15" x="140" y="-100">
+			<name x="80" y="-134">S_ATTACK_DETECTED</name>
+		</location>
+		<init ref="id10"/>
+		<transition id="id16">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="-750" y="-300">bootstrap_completed[0] = true,
+client_state[0] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+server_waiting = true</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-450" y="-350">register_start[0]?</label>
+			<label kind="assignment" x="-450" y="-330">server_waiting = false</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-150" y="-350">register_objects[0]?</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="guard" x="130" y="-390">client_message_id[0] &gt; server_last_msg_id[0]</label>
+			<label kind="assignment" x="130" y="-370">server_last_msg_id[0] = client_message_id[0]</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id14"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="450" y="-350">register_ack[0]!</label>
+			<label kind="assignment" x="450" y="-330">server_waiting = true</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id11"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-450" y="-200">REPLAY_ENABLED &amp;&amp; !DTLS_ENABLED</label>
+			<label kind="synchronisation" x="-450" y="-180">replay_register_start[0]?</label>
+			<label kind="assignment" x="-450" y="-160">replay_message_detected = true,
+attack_detected = true,
+server_waiting = false</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id11"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-450" y="-80">DOS_ENABLED &amp;&amp; !DTLS_ENABLED &amp;&amp;
+attack_counter &lt; MAX_DOS_ATTACKS</label>
+			<label kind="synchronisation" x="-450" y="-60">dos_register_start?</label>
+			<label kind="assignment" x="-450" y="-40">attack_counter = attack_counter + 1,
+dos_throttling_active = attack_counter + 1 &gt;= MAX_DOS_ATTACKS,
+attack_detected = true,
+server_waiting = false</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id15"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="140" y="-100">server_waiting = true</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">ReplayAttacker</name>
+		<location id="id24" x="-760" y="420">
+			<name x="-770" y="386">S_IDLE</name>
+		</location>
+		<location id="id25" x="-460" y="420">
+			<name x="-520" y="386">S_REPLAY_REGISTER</name>
+			<committed/>
+		</location>
+		<init ref="id24"/>
+		<transition id="id26">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="guard" x="-750" y="370">REPLAY_ENABLED &amp;&amp; !DTLS_ENABLED &amp;&amp; server_waiting</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id25"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="-450" y="390">replay_register_start[0]!</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">DosAttacker</name>
+		<location id="id28" x="40" y="420">
+			<name x="30" y="386">S_IDLE</name>
+		</location>
+		<location id="id29" x="340" y="420">
+			<name x="280" y="386">S_DOS_REGISTER</name>
+			<committed/>
+		</location>
+		<init ref="id28"/>
+		<transition id="id30">
+			<source ref="id28"/>
+			<target ref="id29"/>
+			<label kind="guard" x="50" y="370">DOS_ENABLED &amp;&amp; !DTLS_ENABLED &amp;&amp;
+server_waiting &amp;&amp; attack_counter &lt; MAX_DOS_ATTACKS</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id29"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="350" y="390">dos_register_start!</label>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+RegistrationServer1 = RegistrationServer();
+ReplayAttacker1 = ReplayAttacker();
+DosAttacker1 = DosAttacker();
+
+system Client0, RegistrationServer1, ReplayAttacker1, DosAttacker1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; replay_message_detected and attack_detected</formula>
+			<comment>Replay registration attack is reachable and detected.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; dos_throttling_active</formula>
+			<comment>DoS registration attack can trigger throttling.</comment>
+		</query>
+		<query>
+			<formula>A[] (replay_message_detected imply attack_detected)</formula>
+			<comment>A replayed registration is detected.</comment>
+		</query>
+		<query>
+			<formula>A[] (dos_throttling_active imply attack_detected)</formula>
+			<comment>DoS throttling implies attack detection.</comment>
+		</query>
+	</queries>
+</nta>

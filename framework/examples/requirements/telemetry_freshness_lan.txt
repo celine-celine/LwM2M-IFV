@@ -1,0 +1,3 @@
+The monitoring application should accept telemetry only when it belongs to a
+fresh observation relation. The plant network is a low-loss LAN, but occasional
+packet loss, retransmission, and Reset behavior should be considered.

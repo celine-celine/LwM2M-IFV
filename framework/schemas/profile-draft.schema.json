@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LwM2M-IFV Profile Assistant Draft",
+  "type": "object",
+  "required": [
+    "requirement_id",
+    "source_text",
+    "analysis"
+  ],
+  "properties": {
+    "requirement_id": {
+      "type": "string",
+      "description": "Stable identifier for the user requirement or case study."
+    },
+    "source_text": {
+      "type": "string",
+      "description": "Original natural-language requirement."
+    },
+    "analysis": {
+      "type": "object",
+      "required": [
+        "mode",
+        "intent"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "qualitative_security",
+            "quantitative_reliability",
+            "industrial_policy"
+          ]
+        },
+        "intent": {
+          "type": "string"
+        },
+        "intents": {
+          "type": "array",
+          "description": "All catalog intent ids covered by this draft. The scalar intent field remains the primary intent.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scenario": {
+      "type": "object"
+    },
+    "coverage_status": {
+      "enum": [
+        "fully_supported",
+        "partially_supported",
+        "unsupported",
+        "ambiguous"
+      ],
+      "description": "Coverage of the natural-language requirement by the current profile template catalog."
+    },
+    "supported_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unsupported_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "clarification_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "profile_instances": {
+      "type": "array",
+      "description": "Template-driven executable profile instances.",
+      "items": {
+        "type": "object",
+        "required": [
+          "template",
+          "profile",
+          "queries"
+        ],
+        "properties": {
+          "template": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string",
+            "description": "Optional catalog intent id that this profile instance supports."
+          },
+          "profile": {
+            "type": "string"
+          },
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parameters": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "selected_profiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "query_selection": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "profile",
+          "queries"
+        ],
+        "properties": {
+          "profile": {
+            "type": "string"
+          },
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

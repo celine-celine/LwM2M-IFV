@@ -1,0 +1,35 @@
+{
+  "profile_id": "bootstrap-smc",
+  "procedure": "bootstrap",
+  "lwm2m_version": "1.2",
+  "description": "SMC Bootstrap onboarding reliability profile with DTLS delay, configuration loss, timeout, and retransmission.",
+  "model": "framework/generated/bootstrap/Bootstrap_SMC.xml",
+  "security": {
+    "dtls_enabled": true,
+    "dtls_handshake_delay": 100
+  },
+  "transport": {
+    "ack_timeout": 2000,
+    "max_retransmit": 4
+  },
+  "network": {
+    "config_success_weight": 995,
+    "config_loss_weight": 5
+  },
+  "deadline": {
+    "bootstrap_deadline": 21000
+  },
+  "queries": {
+    "bootstrap_success_probability": 0,
+    "bootstrap_failure_probability": 1,
+    "expected_retransmission_count": 2,
+    "expected_config_loss_count": 3
+  },
+  "primary_query": "bootstrap_success_probability",
+  "industrial_properties": [
+    "shopfloor_device_onboarding_probability",
+    "bootstrap_deadline",
+    "retransmission_reliability",
+    "configuration_loss_expectation"
+  ]
+}

@@ -1,0 +1,767 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// ================ Level2-2: Registration安全模型（完整修正版） ================
+
+// 1.1 系统规模定义
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+// 1.2 客户端状态
+typedef int[0,5] client_state_t;
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTER_RECEIVED = 3;
+const int CLIENT_STATE_REGISTERED = 4;
+const int CLIENT_STATE_ERROR = 5;
+
+// 1.3 攻击者类型
+typedef int[0,2] attacker_mode_t;
+const int NO_ATTACK = 0;
+const int REPLAY_ATTACK = 1;
+const int DOS_ATTACK = 2;
+
+// 1.4 全局攻击模式变量（可根据需要修改）
+attacker_mode_t attack_mode = DOS_ATTACK;  // 默认无攻击
+
+// 1.5 通道定义
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_complete[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan attack_register_start;
+
+// 1.6 共享变量
+client_state_t client_state[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_in_progress = false;
+bool bootstrap_completed = false;
+int bootstrap_completed_count = 0;
+int registration_completed_count = 0;
+
+// 安全相关变量
+bool attack_detected = false;
+int attack_counter = 0;
+const int MAX_ATTACKS = 2;
+
+// 消息序列号机制
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+
+// 攻击者检测标志
+bool registration_handler_waiting = false;
+
+// DoS特定变量
+bool dos_throttling_active = false;
+int dos_cooldown_counter = 0;
+const int DOS_COOLDOWN_PERIOD = 3;
+
+// 消息验证变量（全局）
+bool message_fresh = false;
+bool is_valid_client_request = false;
+bool is_dos_condition = false;
+
+// 重放攻击特定变量
+bool replay_message_detected = false;
+int replay_counter = 0;
+const int MAX_REPLAY_ATTEMPTS = 1;
+
+// 公平性保证变量
+bool client_given_chance[MAX_CLIENTS];
+int client_attempt_count[MAX_CLIENTS];
+const int MAX_CLIENT_ATTEMPTS = 2;
+
+// 调试变量
+bool debug_attack_received = false;
+int debug_attack_attempts = 0;
+bool debug_dos_triggered = false;
+bool debug_replay_detected = false;
+bool debug_attacker_active = false;</declaration>
+	<template>
+		<name>BootstrapHandler</name>
+		<location id="id0" x="-416" y="-263">
+			<name x="-426" y="-297">S_IDLE</name>
+		</location>
+		<location id="id1" x="110" y="-263">
+			<name x="100" y="-297">S_COMPLETED</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id2">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-398" y="-263">bootstrap_completed = true</label>
+		</transition>
+		<transition id="id3">
+			<source ref="id1"/>
+			<target ref="id1"/>
+			<nail x="51" y="-382"/>
+			<nail x="144" y="-382"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>int registration_attempts = 0;
+const int MAX_REGISTRATION_ATTEMPTS = 3;
+int delay_counter = 0;
+const int INITIAL_DELAY = 8;</declaration>
+		<location id="id4" x="-1300" y="-986">
+			<name x="-1310" y="-1020">S_INIT</name>
+		</location>
+		<location id="id5" x="-620" y="-986">
+			<name x="-630" y="-1020">S_REGISTER_SEND</name>
+		</location>
+		<location id="id6" x="-238" y="-986">
+			<name x="-248" y="-1020">S_REGISTER_OBJECTS</name>
+		</location>
+		<location id="id7" x="-17" y="-986">
+			<name x="-27" y="-1020">S_REGISTER_WAIT</name>
+		</location>
+		<location id="id8" x="-17" y="-493">
+			<name x="-26" y="-527">S_REGISTERED</name>
+		</location>
+		<location id="id9" x="-620" y="-705">
+			<name x="-630" y="-739">S_ERROR</name>
+		</location>
+		<location id="id10" x="-884" y="-986">
+			<name x="-894" y="-1020">S_READY_FOR_REGISTER</name>
+		</location>
+		<location id="id11" x="-17" y="-705">
+			<name x="-27" y="-739">S_REGISTER_RECEIVED</name>
+			<committed/>
+		</location>
+		<location id="id12" x="-1105" y="-807">
+			<name x="-1115" y="-841">S_DELAY</name>
+		</location>
+		<init ref="id4"/>
+		<transition id="id13">
+			<source ref="id12"/>
+			<target ref="id10"/>
+			<label kind="guard" x="-1087" y="-930">delay_counter &gt;= INITIAL_DELAY &amp;&amp; bootstrap_completed</label>
+			<label kind="assignment" x="-1087" y="-896">client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+bootstrap_completed_count = bootstrap_completed_count + 1</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id12"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-1117" y="-769">delay_counter &lt; INITIAL_DELAY</label>
+			<label kind="assignment" x="-1117" y="-735">delay_counter = delay_counter + 1</label>
+			<nail x="-1130" y="-663"/>
+			<nail x="-1079" y="-663"/>
+		</transition>
+		<transition id="id15">
+			<source ref="id4"/>
+			<target ref="id12"/>
+			<label kind="assignment" x="-1428" y="-943">client_state[id] = CLIENT_STATE_INIT,
+client_registered[id] = false,
+client_message_id[id] = 0,
+delay_counter = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id7"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-433" y="-1300">registration_attempts &lt; MAX_REGISTRATION_ATTEMPTS</label>
+			<nail x="-204" y="-1266"/>
+		</transition>
+		<transition id="id17">
+			<source ref="id8"/>
+			<target ref="id8"/>
+			<nail x="-68" y="-399"/>
+			<nail x="42" y="-399"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id11"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="-17" y="-616">register_ack[id]!</label>
+			<label kind="assignment" x="-17" y="-599">client_state[id] = CLIENT_STATE_REGISTERED,
+client_registered[id] = true,
+registration_completed_count = registration_completed_count + 1</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id10"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-969" y="-1130">!dos_throttling_active</label>
+			<label kind="assignment" x="-969" y="-1113">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1,
+registration_attempts = registration_attempts + 1</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id5"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-739" y="-824">registration_attempts &gt;= MAX_REGISTRATION_ATTEMPTS</label>
+			<label kind="assignment" x="-739" y="-790">client_state[id] = CLIENT_STATE_ERROR</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id7"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="-213" y="-918">register_complete[id]?</label>
+			<label kind="assignment" x="-213" y="-901">client_state[id] = CLIENT_STATE_REGISTER_RECEIVED</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-220" y="-1003">register_objects[id]!</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-602" y="-1003">register_start[id]!</label>
+		</transition>
+	</template>
+	<template>
+		<name>RegistrationHandler</name>
+		<declaration>int current_client = 0;
+bool client_reg_processed[MAX_CLIENTS];
+int received_msg_id = -1;</declaration>
+		<location id="id24" x="-1462" y="-1088">
+			<name x="-1472" y="-1122">S_IDLE</name>
+		</location>
+		<location id="id25" x="-960" y="-1088">
+			<name x="-970" y="-1122">S_WAITING_BOOTSTRAP</name>
+		</location>
+		<location id="id26" x="-654" y="-1088">
+			<name x="-664" y="-1122">S_SELECTING_CLIENT</name>
+		</location>
+		<location id="id27" x="-212" y="-1088">
+			<name x="-222" y="-1122">S_WAITING_REG_START</name>
+		</location>
+		<location id="id28" x="-1266" y="-739">
+			<name x="-1276" y="-773">S_VERIFYING_MESSAGE</name>
+			<committed/>
+		</location>
+		<location id="id29" x="-1266" y="-535">
+			<name x="-1276" y="-569">S_WAITING_REG_OBJECTS</name>
+		</location>
+		<location id="id30" x="-1266" y="-382">
+			<name x="-1276" y="-416">S_SENDING_REG_COMPLETE</name>
+		</location>
+		<location id="id31" x="-722" y="-382">
+			<name x="-732" y="-416">S_WAITING_ACK</name>
+		</location>
+		<location id="id32" x="-722" y="-535">
+			<name x="-732" y="-569">S_REJECTING_MESSAGE</name>
+		</location>
+		<location id="id33" x="-969" y="-1258">
+			<name x="-979" y="-1292">S_ALL_REGISTERED</name>
+		</location>
+		<location id="id34" x="-1326" y="-1258">
+			<name x="-1336" y="-1292">S_FINAL_IDLE</name>
+		</location>
+		<location id="id35" x="-1317" y="-1487">
+			<name x="-1327" y="-1521">S_DOS_THROTTLING</name>
+		</location>
+		<location id="id36" x="-1751" y="-1181">
+			<name x="-1802" y="-1215">S_DOS_TRIGGER</name>
+			<committed/>
+		</location>
+		<init ref="id24"/>
+		<transition id="id37">
+			<source ref="id28"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-1139" y="-1062">is_dos_condition &amp;&amp; attack_counter &lt; MAX_ATTACKS</label>
+			<label kind="assignment" x="-1105" y="-1045">registration_handler_waiting = true</label>
+			<nail x="-1105" y="-918"/>
+		</transition>
+		<transition id="id38">
+			<source ref="id36"/>
+			<target ref="id35"/>
+			<label kind="assignment" x="-1733" y="-1334">dos_throttling_active = true,
+debug_dos_triggered = 2</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id28"/>
+			<target ref="id36"/>
+			<label kind="guard" x="-1878" y="-1054">is_dos_condition &amp;&amp; attack_counter &gt;= MAX_ATTACKS</label>
+			<label kind="assignment" x="-1878" y="-1020">debug_dos_triggered = 1</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id35"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-1258" y="-1428">dos_cooldown_counter &gt;= DOS_COOLDOWN_PERIOD</label>
+			<label kind="assignment" x="-1224" y="-1385">dos_throttling_active = false,
+dos_cooldown_counter = 0</label>
+		</transition>
+		<transition id="id41">
+			<source ref="id26"/>
+			<target ref="id35"/>
+			<label kind="guard" x="-858" y="-1521">dos_throttling_active</label>
+			<nail x="-816" y="-1487"/>
+		</transition>
+		<transition id="id42">
+			<source ref="id35"/>
+			<target ref="id35"/>
+			<label kind="guard" x="-1393" y="-1593">dos_cooldown_counter &lt; DOS_COOLDOWN_PERIOD</label>
+			<label kind="assignment" x="-1521" y="-1615">dos_cooldown_counter = dos_cooldown_counter + 1</label>
+			<nail x="-1411" y="-1632"/>
+			<nail x="-1224" y="-1632"/>
+		</transition>
+		<transition id="id43">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-195" y="-1003">attack_mode == DOS_ATTACK &amp;&amp; 
+registration_handler_waiting</label>
+			<label kind="synchronisation" x="-187" y="-952">attack_register_start?</label>
+			<label kind="assignment" x="-195" y="-935">registration_handler_waiting = false,
+attack_counter = attack_counter + 1,
+debug_attack_received = true,
+debug_attack_attempts = debug_attack_attempts + 1,
+is_dos_condition = true,
+is_valid_client_request = true,
+message_fresh = true</label>
+			<nail x="-102" y="-952"/>
+		</transition>
+		<transition id="id44">
+			<source ref="id25"/>
+			<target ref="id35"/>
+			<label kind="guard" x="-1521" y="-1513">dos_throttling_active</label>
+			<nail x="-1079" y="-1164"/>
+			<nail x="-1479" y="-1164"/>
+			<nail x="-1479" y="-1487"/>
+		</transition>
+		<transition id="id45">
+			<source ref="id34"/>
+			<target ref="id34"/>
+			<nail x="-1326" y="-1360"/>
+			<nail x="-1258" y="-1360"/>
+		</transition>
+		<transition id="id46">
+			<source ref="id33"/>
+			<target ref="id34"/>
+		</transition>
+		<transition id="id47">
+			<source ref="id26"/>
+			<target ref="id33"/>
+			<label kind="guard" x="-1139" y="-1241">!(exists (c: client_id_t) !client_reg_processed[c])</label>
+			<label kind="assignment" x="-1139" y="-1224">registration_in_progress = false,
+registration_handler_waiting = false</label>
+		</transition>
+		<transition id="id48">
+			<source ref="id31"/>
+			<target ref="id26"/>
+			<label kind="synchronisation" x="-704" y="-399">register_ack[current_client]?</label>
+			<label kind="assignment" x="-704" y="-382">client_reg_processed[current_client] = true,
+current_client = current_client + 1</label>
+			<nail x="34" y="-382"/>
+			<nail x="26" y="-1334"/>
+			<nail x="-654" y="-1334"/>
+		</transition>
+		<transition id="id49">
+			<source ref="id30"/>
+			<target ref="id31"/>
+			<label kind="synchronisation" x="-1146" y="-399">register_complete[current_client]!</label>
+		</transition>
+		<transition id="id50">
+			<source ref="id29"/>
+			<target ref="id30"/>
+			<label kind="synchronisation" x="-1266" y="-475">register_objects[current_client]?</label>
+		</transition>
+		<transition id="id51">
+			<source ref="id32"/>
+			<target ref="id26"/>
+			<label kind="assignment" x="-459" y="-1283">current_client = current_client + 1</label>
+			<nail x="-42" y="-535"/>
+			<nail x="-42" y="-1258"/>
+			<nail x="-654" y="-1258"/>
+		</transition>
+		<transition id="id52">
+			<source ref="id28"/>
+			<target ref="id32"/>
+			<label kind="guard" x="-994" y="-654">!is_dos_condition &amp;&amp; 
+!is_valid_client_request &amp;&amp; 
+!message_fresh</label>
+			<label kind="assignment" x="-994" y="-603">attack_detected = true,
+replay_message_detected = true,
+debug_replay_detected = true</label>
+		</transition>
+		<transition id="id53">
+			<source ref="id28"/>
+			<target ref="id29"/>
+			<label kind="guard" x="-1377" y="-654">is_valid_client_request &amp;&amp; 
+message_fresh &amp;&amp;
+!is_dos_condition</label>
+			<label kind="assignment" x="-1470" y="-680">server_last_msg_id[current_client] = received_msg_id</label>
+		</transition>
+		<transition id="id54">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-705" y="-790">attack_mode == REPLAY_ATTACK &amp;&amp; 
+registration_handler_waiting</label>
+			<label kind="synchronisation" x="-705" y="-748">attack_register_start?</label>
+			<label kind="assignment" x="-705" y="-731">registration_handler_waiting = false,
+replay_counter = replay_counter + 1,
+debug_attack_received = true,
+debug_attack_attempts = debug_attack_attempts + 1,
+is_dos_condition = false,
+is_valid_client_request = false,
+message_fresh = false</label>
+			<nail x="-212" y="-739"/>
+		</transition>
+		<transition id="id55">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="-918" y="-1003">register_start[current_client]?</label>
+			<label kind="assignment" x="-909" y="-977">registration_handler_waiting = false,
+received_msg_id = client_message_id[current_client],
+is_valid_client_request = true,
+message_fresh = (received_msg_id &gt; server_last_msg_id[current_client] || 
+                server_last_msg_id[current_client] == -1),
+is_dos_condition = false</label>
+		</transition>
+		<transition id="id56">
+			<source ref="id26"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-561" y="-1224">current_client &lt; MAX_CLIENTS &amp;&amp; 
+!client_reg_processed[current_client] &amp;&amp;
+!dos_throttling_active &amp;&amp;
+(!client_given_chance[current_client] || 
+client_attempt_count[current_client] &lt; MAX_CLIENT_ATTEMPTS)</label>
+			<label kind="assignment" x="-544" y="-1113">registration_handler_waiting = true,
+client_given_chance[current_client] = true,
+client_attempt_count[current_client] = client_attempt_count[current_client] + 1</label>
+		</transition>
+		<transition id="id57">
+			<source ref="id25"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-1037" y="-1173">bootstrap_completed &amp;&amp; !dos_throttling_active</label>
+			<label kind="assignment" x="-1037" y="-1156">registration_in_progress = true</label>
+		</transition>
+		<transition id="id58">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="assignment" x="-1428" y="-1215">registration_in_progress = false,
+attack_detected = false,
+attack_counter = 0,
+dos_throttling_active = false,
+dos_cooldown_counter = 0,
+replay_message_detected = false,
+replay_counter = 0,
+client_reg_processed[0] = false,
+client_reg_processed[1] = false,
+registration_handler_waiting = false,
+message_fresh = false,
+is_valid_client_request = false,
+is_dos_condition = false,
+debug_attack_received = false,
+debug_dos_triggered = 0,
+debug_attack_attempts = 0,
+debug_replay_detected = false,
+client_given_chance[0] = false,
+client_given_chance[1] = false,
+client_attempt_count[0] = 0,
+client_attempt_count[1] = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>Attacker_Replay</name>
+		<declaration>int local_attack_sent = 0;
+bool attack_completed = false;
+int waiting_counter = 0;
+const int MAX_WAITING_TIME = 3;</declaration>
+		<location id="id59" x="-935" y="-816">
+			<name x="-945" y="-850">S_IDLE</name>
+		</location>
+		<location id="id60" x="-654" y="-816">
+			<name x="-664" y="-850">S_ATTACKING</name>
+		</location>
+		<location id="id61" x="-280" y="-816">
+			<name x="-290" y="-850">S_WAITING</name>
+		</location>
+		<location id="id62" x="-654" y="-561">
+			<name x="-680" y="-544">S_COMPLETED</name>
+		</location>
+		<init ref="id59"/>
+		<transition id="id63">
+			<source ref="id62"/>
+			<target ref="id62"/>
+			<nail x="-714" y="-476"/>
+			<nail x="-612" y="-476"/>
+		</transition>
+		<transition id="id64">
+			<source ref="id59"/>
+			<target ref="id59"/>
+			<nail x="-994" y="-858"/>
+			<nail x="-994" y="-782"/>
+		</transition>
+		<transition id="id65">
+			<source ref="id60"/>
+			<target ref="id62"/>
+			<label kind="guard" x="-807" y="-646">attack_mode == REPLAY_ATTACK &amp;&amp; 
+replay_counter &gt;= MAX_REPLAY_ATTEMPTS</label>
+			<label kind="assignment" x="-790" y="-671">attack_completed = true</label>
+		</transition>
+		<transition id="id66">
+			<source ref="id61"/>
+			<target ref="id60"/>
+			<label kind="guard" x="-518" y="-722">waiting_counter &gt;= MAX_WAITING_TIME &amp;&amp; !attack_completed</label>
+			<nail x="-280" y="-671"/>
+			<nail x="-654" y="-671"/>
+		</transition>
+		<transition id="id67">
+			<source ref="id61"/>
+			<target ref="id61"/>
+			<label kind="guard" x="-296" y="-969">waiting_counter &lt; MAX_WAITING_TIME</label>
+			<label kind="assignment" x="-296" y="-935">waiting_counter = waiting_counter + 1</label>
+			<nail x="-314" y="-935"/>
+			<nail x="-237" y="-935"/>
+			<nail x="-272" y="-824"/>
+		</transition>
+		<transition id="id68">
+			<source ref="id60"/>
+			<target ref="id61"/>
+			<label kind="guard" x="-636" y="-850">!registration_handler_waiting &amp;&amp; !attack_completed</label>
+			<label kind="assignment" x="-636" y="-816">waiting_counter = 0</label>
+		</transition>
+		<transition id="id69">
+			<source ref="id60"/>
+			<target ref="id60"/>
+			<label kind="guard" x="-799" y="-1062">attack_mode == REPLAY_ATTACK &amp;&amp; 
+!dos_throttling_active &amp;&amp; 
+replay_counter &lt; MAX_REPLAY_ATTEMPTS &amp;&amp;
+registration_handler_waiting</label>
+			<label kind="synchronisation" x="-773" y="-977">attack_register_start!</label>
+			<label kind="assignment" x="-850" y="-969">local_attack_sent = local_attack_sent + 1,
+           replay_counter = replay_counter + 1</label>
+			<nail x="-722" y="-935"/>
+			<nail x="-586" y="-935"/>
+		</transition>
+		<transition id="id70">
+			<source ref="id59"/>
+			<target ref="id60"/>
+			<label kind="guard" x="-952" y="-909">attack_mode == REPLAY_ATTACK &amp;&amp; 
+registration_in_progress &amp;&amp; 
+!dos_throttling_active</label>
+			<label kind="assignment" x="-917" y="-816">debug_attacker_active = true</label>
+		</transition>
+	</template>
+	<template>
+		<name>Attacker_DOS</name>
+		<declaration>int local_attack_sent = 0;
+bool attack_completed = false;
+int waiting_counter = 0;
+const int MAX_WAITING_TIME = 3;</declaration>
+		<location id="id71" x="-586" y="-382">
+			<name x="-596" y="-416">S_IDLE</name>
+		</location>
+		<location id="id72" x="-263" y="-382">
+			<name x="-273" y="-416">S_ATTACKING</name>
+		</location>
+		<location id="id73" x="68" y="-382">
+			<name x="58" y="-416">S_WAITING</name>
+		</location>
+		<location id="id74" x="-263" y="-17">
+			<name x="-273" y="-51">S_COMPLETED</name>
+		</location>
+		<init ref="id71"/>
+		<transition id="id75">
+			<source ref="id71"/>
+			<target ref="id71"/>
+			<nail x="-646" y="-450"/>
+			<nail x="-646" y="-314"/>
+		</transition>
+		<transition id="id76">
+			<source ref="id74"/>
+			<target ref="id74"/>
+			<nail x="-365" y="-51"/>
+			<nail x="-365" y="42"/>
+		</transition>
+		<transition id="id77">
+			<source ref="id72"/>
+			<target ref="id74"/>
+			<label kind="guard" x="-263" y="-233">attack_mode == DOS_ATTACK &amp;&amp; dos_throttling_active</label>
+			<label kind="assignment" x="-263" y="-199">attack_completed = true</label>
+		</transition>
+		<transition id="id78">
+			<source ref="id73"/>
+			<target ref="id72"/>
+			<label kind="guard" x="-245" y="-289">waiting_counter &gt;= MAX_WAITING_TIME &amp;&amp; !attack_completed</label>
+			<nail x="68" y="-255"/>
+			<nail x="-263" y="-255"/>
+		</transition>
+		<transition id="id79">
+			<source ref="id73"/>
+			<target ref="id73"/>
+			<label kind="guard" x="43" y="-569">waiting_counter &lt; MAX_WAITING_TIME</label>
+			<label kind="assignment" x="43" y="-535">waiting_counter = waiting_counter + 1</label>
+			<nail x="25" y="-535"/>
+			<nail x="93" y="-535"/>
+		</transition>
+		<transition id="id80">
+			<source ref="id72"/>
+			<target ref="id73"/>
+			<label kind="guard" x="-245" y="-416">!registration_handler_waiting &amp;&amp; !attack_completed</label>
+			<label kind="assignment" x="-245" y="-382">waiting_counter = 0</label>
+		</transition>
+		<transition id="id81">
+			<source ref="id72"/>
+			<target ref="id72"/>
+			<label kind="guard" x="-297" y="-620">attack_mode == DOS_ATTACK &amp;&amp; 
+!dos_throttling_active &amp;&amp; 
+attack_counter &lt; MAX_ATTACKS * 2</label>
+			<label kind="synchronisation" x="-288" y="-561">attack_register_start!</label>
+			<label kind="assignment" x="-288" y="-544">local_attack_sent = local_attack_sent + 1</label>
+			<nail x="-306" y="-544"/>
+			<nail x="-229" y="-544"/>
+		</transition>
+		<transition id="id82">
+			<source ref="id71"/>
+			<target ref="id72"/>
+			<label kind="guard" x="-568" y="-416">attack_mode == DOS_ATTACK &amp;&amp; 
+registration_in_progress &amp;&amp; 
+!dos_throttling_active</label>
+			<label kind="assignment" x="-578" y="-365">debug_attacker_active = true</label>
+		</transition>
+	</template>
+	<system>//Client1 = Client(0);
+//Client2 = Client(1);
+//BootstrapHandler1 = BootstrapHandler();
+//RegistrationHandler1 = RegistrationHandler(NO_ATTACK);
+
+//system Client1, Client2, BootstrapHandler1, RegistrationHandler1;
+
+Client1 = Client(0);
+Client2 = Client(1);
+BootstrapHandler1 = BootstrapHandler();
+RegistrationHandler1 = RegistrationHandler();
+Attacker_Replay1 = Attacker_Replay();
+Attacker_DOS1 = Attacker_DOS();
+
+system Client1, Client2, BootstrapHandler1, 
+       RegistrationHandler1,
+//       Attacker_Replay1;
+       Attacker_DOS1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:15 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) 
+        (client_registered[c] imply 
+         server_last_msg_id[c] &gt;= client_message_id[c])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:16 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// NO ATTACK</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == NO_ATTACK imply !attack_detected)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-01-02 23:00:00 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == NO_ATTACK and 
+         forall(c: client_id_t) client_registered[c])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-01-02 23:00:05 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == NO_ATTACK imply !attack_detected and !dos_throttling_active)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-01-02 23:09:23 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// REPLAY ATTACK</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == REPLAY_ATTACK and attack_detected)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:02:42 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == REPLAY_ATTACK and 
+         exists(c: client_id_t) client_registered[c])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:04 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == REPLAY_ATTACK and replay_message_detected imply attack_detected)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:06 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>//DOS ATTACK</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == DOS_ATTACK and dos_throttling_active)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:01:14 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == DOS_ATTACK and 
+         attack_counter &gt;= MAX_ATTACKS and dos_throttling_active)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:01:16 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == DOS_ATTACK and !dos_throttling_active and 
+         exists(c: client_id_t) client_registered[c])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:01:17 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// GENERAL</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (client_given_chance[0])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:44 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (client_given_chance[1])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:43 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (client_state[0] == CLIENT_STATE_BOOTSTRAP_COMPLETE)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:03:48 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (client_state[1] == CLIENT_STATE_BOOTSTRAP_COMPLETE)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 10:04:56 +0800">
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+	</queries>
+</nta>

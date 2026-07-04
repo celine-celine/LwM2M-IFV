@@ -1,0 +1,86 @@
+{
+  "requirement_id": "clone_rejection_demo",
+  "source_text": "A cloned endpoint must be rejected. The legitimate shop-floor device may receive management commands only after bootstrap binding, endpoint identity, and active registration have all been verified.",
+  "analysis": {
+    "mode": "qualitative_security",
+    "intent": "duplicate_endpoint_rejection"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "legitimate_device"
+      },
+      {
+        "id": "client_1",
+        "role": "cloned_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Reject cloned endpoints.",
+    "Require endpoint identity binding before command authorization."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "The duplicate endpoint is represented by client_1 using the endpoint identity of client_0."
+  ],
+  "profile_instances": [
+    {
+      "template": "registration_identity_binding_template",
+      "profile": "registration-identity-binding",
+      "queries": [
+        "duplicate_endpoint_rejected",
+        "clone_not_authorized",
+        "commands_require_identity_binding"
+      ],
+      "parameters": {
+        "identity_binding_required": true,
+        "duplicate_endpoint_policy": "reject"
+      }
+    },
+    {
+      "template": "industrial_policy_monitor_template",
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "clone_rejected_by_policy",
+        "rejected_clone_not_authorized",
+        "clone_never_authorized"
+      ],
+      "parameters": {
+        "policy_monitor_enabled": true
+      }
+    }
+  ],
+  "selected_profiles": [
+    "registration-identity-binding",
+    "industrial-policy-binding-cleanup"
+  ],
+  "query_selection": [
+    {
+      "profile": "registration-identity-binding",
+      "queries": [
+        "duplicate_endpoint_rejected",
+        "clone_not_authorized",
+        "commands_require_identity_binding"
+      ]
+    },
+    {
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "clone_rejected_by_policy",
+        "rejected_clone_not_authorized",
+        "clone_never_authorized"
+      ]
+    }
+  ],
+  "parameters": {
+    "dtls_enabled": true,
+    "identity_binding_required": true,
+    "duplicate_endpoint_policy": "reject",
+    "policy_monitor_enabled": true
+  }
+}

@@ -1,0 +1,3 @@
+A shop-floor endpoint may be admitted only after secure bootstrap has provisioned
+the expected server identity and credential. Registration with a mismatched or
+rogue server identity must be rejected before management commands are allowed.

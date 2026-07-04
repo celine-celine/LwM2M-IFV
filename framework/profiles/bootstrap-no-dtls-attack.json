@@ -1,0 +1,34 @@
+{
+  "profile_id": "bootstrap-no-dtls-attack",
+  "procedure": "bootstrap",
+  "lwm2m_version": "1.2",
+  "description": "No-DTLS Bootstrap attack profile showing that fake Bootstrap Server and MITM tampering are reachable but rejected by client-side configuration verification.",
+  "model": "framework/generated/bootstrap/Bootstrap_NoDTLS_Attack.xml",
+  "security": {
+    "dtls_enabled": false,
+    "server_authentication": false,
+    "config_integrity": false
+  },
+  "attacker": {
+    "mitm_enabled": true,
+    "fake_bootstrap_server_enabled": true,
+    "attack_success_expected": false
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "both_clients_bootstrap": 1,
+    "bootstrap_requires_verified_config": 2,
+    "fake_config_rejected_after_verification": 3,
+    "tampered_config_rejected_after_verification": 4,
+    "dtls_blocks_fake_and_tamper": 5,
+    "fake_config_reachable_and_rejected": 6,
+    "tampered_config_reachable_and_rejected": 7,
+    "only_valid_config_bootstraps": 8
+  },
+  "primary_query": "fake_config_reachable_and_rejected",
+  "industrial_properties": [
+    "attack_reachability",
+    "invalid_config_rejection",
+    "safe_onboarding_failure"
+  ]
+}

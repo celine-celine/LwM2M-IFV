@@ -1,0 +1,3 @@
+A cloned endpoint must be rejected. The legitimate shop-floor device may receive
+management commands only after bootstrap binding, endpoint identity, and active
+registration have all been verified.

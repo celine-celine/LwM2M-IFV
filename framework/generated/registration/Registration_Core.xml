@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Registration core profile model.
+// The model abstracts LwM2M Registration as:
+// Bootstrap complete -> Register -> object list -> server validation -> ACK.
+
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTER_RECEIVED = 3;
+const int CLIENT_STATE_REGISTERED = 4;
+const int CLIENT_STATE_ERROR = 5;
+
+const bool DTLS_ENABLED = true;
+
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_ack_received[MAX_CLIENTS];
+bool registration_rejected[MAX_CLIENTS];
+bool object_list_received[MAX_CLIENTS];
+bool message_fresh[MAX_CLIENTS];
+int client_state[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+int registration_completed_count = 0;
+int registration_turn = 0;
+</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id0" x="-760" y="80">
+			<name x="-770" y="46">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id1" x="-460" y="80">
+			<name x="-520" y="46">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-160" y="80">
+			<name x="-220" y="46">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id3" x="140" y="80">
+			<name x="90" y="46">S_WAIT_ACK</name>
+		</location>
+		<location id="id4" x="440" y="0">
+			<name x="430" y="-34">S_REGISTERED</name>
+		</location>
+		<location id="id5" x="440" y="180">
+			<name x="430" y="146">S_ERROR</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id6">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="20">bootstrap_completed[id] &amp;&amp; id == registration_turn</label>
+			<label kind="assignment" x="-750" y="40">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-450" y="50">register_start[id]!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-150" y="50">register_objects[id]!</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="150" y="0">register_ack[id]?</label>
+			<label kind="assignment" x="150" y="20">registration_ack_received[id] = true,
+client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED,
+registration_completed_count = registration_completed_count + 1</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="guard" x="150" y="170">registration_rejected[id]</label>
+			<label kind="assignment" x="150" y="190">client_state[id] = CLIENT_STATE_ERROR</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<nail x="380" y="-60"/>
+			<nail x="500" y="-60"/>
+		</transition>
+		<transition id="id12">
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<nail x="380" y="240"/>
+			<nail x="500" y="240"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<declaration>int current_client = 0;</declaration>
+		<location id="id13" x="-760" y="-340">
+			<name x="-770" y="-374">S_INIT</name>
+			<committed/>
+		</location>
+		<location id="id14" x="-520" y="-340">
+			<name x="-580" y="-374">S_SELECT_CLIENT</name>
+			<committed/>
+		</location>
+		<location id="id15" x="-240" y="-340">
+			<name x="-300" y="-374">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id16" x="60" y="-340">
+			<name x="0" y="-374">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id17" x="360" y="-340">
+			<name x="300" y="-374">S_VALIDATE</name>
+			<committed/>
+		</location>
+		<location id="id18" x="640" y="-340">
+			<name x="580" y="-374">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id19" x="-520" y="-100">
+			<name x="-530" y="-134">S_ALL_REGISTERED</name>
+		</location>
+		<init ref="id13"/>
+		<transition id="id20">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="-750" y="-320">bootstrap_completed[0] = true,
+bootstrap_completed[1] = true,
+client_state[0] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+client_state[1] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+current_client = 0</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id14"/>
+			<target ref="id19"/>
+			<label kind="guard" x="-530" y="-210">current_client &gt;= MAX_CLIENTS</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="-510" y="-400">current_client &lt; MAX_CLIENTS</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id15"/>
+			<target ref="id16"/>
+			<label kind="synchronisation" x="-230" y="-370">register_start[current_client]?</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id16"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="70" y="-370">register_objects[current_client]?</label>
+			<label kind="assignment" x="70" y="-350">object_list_received[current_client] = true</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="guard" x="360" y="-410">client_message_id[current_client] &gt; server_last_msg_id[current_client]</label>
+			<label kind="assignment" x="360" y="-390">message_fresh[current_client] = true,
+server_last_msg_id[current_client] = client_message_id[current_client]</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id18"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="650" y="-370">register_ack[current_client]!</label>
+			<label kind="assignment" x="650" y="-350">current_client = current_client + 1,
+registration_turn = registration_turn + 1</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id19"/>
+			<target ref="id19"/>
+			<nail x="-580" y="-40"/>
+			<nail x="-460" y="-40"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+Client1 = Client(1);
+RegistrationServer1 = RegistrationServer();
+
+system Client0, Client1, RegistrationServer1;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.S_REGISTERED and Client1.S_REGISTERED</formula>
+			<comment>Both clients can register after bootstrap.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (client_registered[c] imply bootstrap_completed[c])</formula>
+			<comment>Registration is possible only after Bootstrap completion.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (client_registered[c] imply object_list_received[c])</formula>
+			<comment>A registered client must have sent its object list.</comment>
+		</query>
+		<query>
+			<formula>A[] forall(c: client_id_t) (client_registered[c] imply server_last_msg_id[c] == client_message_id[c])</formula>
+			<comment>Server records the fresh message id used for registration.</comment>
+		</query>
+	</queries>
+</nta>

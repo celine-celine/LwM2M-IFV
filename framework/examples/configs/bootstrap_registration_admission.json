@@ -1,0 +1,101 @@
+{
+  "requirement_id": "bootstrap_registration_admission_demo",
+  "source_text": "A shop-floor endpoint may be admitted only after secure bootstrap has provisioned the expected server identity and credential. Registration with a mismatched or rogue server identity must be rejected before management commands are allowed.",
+  "analysis": {
+    "mode": "qualitative_security",
+    "intent": "secure_bootstrap_registration_admission"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "legitimate_device"
+      }
+    ],
+    "servers": [
+      {
+        "id": "bootstrap_server",
+        "role": "trusted_provisioning_server"
+      },
+      {
+        "id": "rogue_registration_server",
+        "role": "mismatched_server_identity"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Require bootstrap-registration server identity binding.",
+    "Reject mismatched or rogue registration server identity.",
+    "Require verified active session before command authorization."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "Credential binding is represented by the bounded credential equality predicate in the registration profile."
+  ],
+  "profile_instances": [
+    {
+      "template": "registration_bootstrap_binding_template",
+      "profile": "registration-bootstrap-binding",
+      "queries": [
+        "bound_registration_reachable",
+        "binding_violation_rejected",
+        "registered_server_identity_matches_bootstrap",
+        "registered_credential_matches_bootstrap",
+        "commands_require_binding"
+      ],
+      "parameters": {
+        "bootstrap_registration_binding": true,
+        "server_identity_binding": true,
+        "credential_binding": true
+      }
+    },
+    {
+      "template": "industrial_policy_monitor_template",
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "legitimate_device_authorized",
+        "commands_require_verified_active_session"
+      ],
+      "parameters": {
+        "policy_monitor_enabled": true
+      }
+    }
+  ],
+  "selected_profiles": [
+    "registration-bootstrap-binding",
+    "industrial-policy-binding-cleanup"
+  ],
+  "query_selection": [
+    {
+      "profile": "registration-bootstrap-binding",
+      "queries": [
+        "bound_registration_reachable",
+        "binding_violation_rejected",
+        "registered_server_identity_matches_bootstrap",
+        "registered_credential_matches_bootstrap",
+        "commands_require_binding"
+      ]
+    },
+    {
+      "profile": "industrial-policy-binding-cleanup",
+      "queries": [
+        "legitimate_device_authorized",
+        "commands_require_verified_active_session"
+      ]
+    }
+  ],
+  "parameters": {
+    "dtls_enabled": true,
+    "bootstrap_registration_binding": true,
+    "server_identity_binding": true,
+    "credential_binding": true,
+    "policy_monitor_enabled": true
+  },
+  "assistant_notes": [
+    "The registration-bootstrap-binding profile covers server identity and credential binding.",
+    "The industrial policy profile links verified binding and active session evidence to command authorization."
+  ]
+}

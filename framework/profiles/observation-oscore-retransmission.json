@@ -1,0 +1,31 @@
+{
+  "profile_id": "observation-oscore-retransmission",
+  "procedure": "observation",
+  "lwm2m_version": "1.2",
+  "description": "Observation with OSCORE-style security overhead and CoAP-style retransmission.",
+  "model": "LwM2M Models/Level 3/Observation/Smc_Observation_OSCORE_Retransmisssion.xml",
+  "security": {
+    "mode": "oscore",
+    "security_overhead_enabled": true,
+    "freshness_protection_enabled": true
+  },
+  "transport": {
+    "confirmable_notify": true,
+    "retransmission_enabled": true,
+    "max_retransmit": 4
+  },
+  "network": {
+    "loss_weight_success": 995,
+    "loss_weight_failure": 5
+  },
+  "queries": {
+    "notification_delivery": 1,
+    "expected_received": 2
+  },
+  "primary_query": "notification_delivery",
+  "industrial_properties": [
+    "notification_delivery_probability",
+    "retransmission_reliability",
+    "failure_count"
+  ]
+}

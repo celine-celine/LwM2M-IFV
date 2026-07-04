@@ -1,0 +1,4 @@
+A shop-floor PLC may receive management commands only after secure Bootstrap has
+bound the expected registration server identity and the endpoint identity has
+been verified. A cloned endpoint using the same endpoint name must be rejected
+and must never receive command authorization.

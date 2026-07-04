@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Bootstrap SMC onboarding reliability model.
+
+const int MAX_CLIENTS = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAPPING = 1;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 2;
+const int CLIENT_STATE_ERROR = 12;
+
+const bool DTLS_ENABLED = true;
+const int DTLS_HANDSHAKE_DELAY = 100;
+const int BOOTSTRAP_DEADLINE = 21000;
+const int ACK_TIMEOUT = 2000;
+const int MAX_RETRANSMIT = 4;
+
+const int WEIGHT_CONFIG_SUCCESS = 995;
+const int WEIGHT_CONFIG_LOSS = 5;
+
+broadcast chan bootstrap_request[MAX_CLIENTS];
+
+bool bootstrap_request_pending[MAX_CLIENTS];
+bool bootstrap_config_pending[MAX_CLIENTS];
+bool client_bootstrapped[MAX_CLIENTS];
+bool bootstrap_failed[MAX_CLIENTS];
+bool dtls_established[MAX_CLIENTS];
+int client_state[MAX_CLIENTS];
+int retransmission_count[MAX_CLIENTS];
+int config_loss_count[MAX_CLIENTS];
+int bootstrap_completed_count = 0;
+</declaration>
+	<template>
+		<name x="5" y="5">BootstrapServer</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>clock t;</declaration>
+		<location id="id0" x="-760" y="-260">
+			<name x="-770" y="-294">S_IDLE</name>
+			<label kind="exponentialrate" x="-770" y="-240">1</label>
+		</location>
+		<location id="id1" x="-460" y="-260">
+			<name x="-520" y="-294">S_DTLS_HANDSHAKE</name>
+			<label kind="invariant" x="-520" y="-240">t &lt;= DTLS_HANDSHAKE_DELAY</label>
+		</location>
+		<location id="id2" x="-160" y="-260">
+			<name x="-220" y="-294">S_SEND_CONFIG</name>
+			<committed/>
+		</location>
+		<branchpoint id="id3" x="120" y="-260"/>
+		<init ref="id0"/>
+		<transition id="id4">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="-320">bootstrap_request_pending[id] &amp;&amp; DTLS_ENABLED</label>
+			<label kind="assignment" x="-750" y="-300">bootstrap_request_pending[id] = false,
+t = 0</label>
+		</transition>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-750" y="-190">bootstrap_request_pending[id] &amp;&amp; !DTLS_ENABLED</label>
+			<label kind="assignment" x="-750" y="-170">bootstrap_request_pending[id] = false,
+t = 0</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-450" y="-320">t &gt;= DTLS_HANDSHAKE_DELAY</label>
+			<label kind="assignment" x="-450" y="-300">dtls_established[id] = true,
+t = 0</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="130" y="-310">bootstrap_config_pending[id] = true,
+t = 0</label>
+			<label kind="probability" x="130" y="-330">WEIGHT_CONFIG_SUCCESS</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="130" y="-210">config_loss_count[id] = config_loss_count[id] + 1,
+t = 0</label>
+			<label kind="probability" x="130" y="-230">WEIGHT_CONFIG_LOSS</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>clock t;
+int retry = 0;</declaration>
+		<location id="id10" x="-760" y="180">
+			<name x="-770" y="146">S_INIT</name>
+			<label kind="invariant" x="-770" y="200">t &lt;= 0</label>
+		</location>
+		<location id="id11" x="-460" y="180">
+			<name x="-520" y="146">S_WAIT_CONFIG</name>
+			<label kind="invariant" x="-520" y="200">t &lt;= ACK_TIMEOUT</label>
+		</location>
+		<location id="id12" x="-120" y="80">
+			<name x="-130" y="46">S_BOOTSTRAP_DONE</name>
+			<label kind="invariant" x="-130" y="100">t &lt;= BOOTSTRAP_DEADLINE</label>
+		</location>
+		<location id="id13" x="-120" y="280">
+			<name x="-130" y="246">S_ERROR</name>
+			<label kind="invariant" x="-130" y="300">t &lt;= BOOTSTRAP_DEADLINE</label>
+		</location>
+		<init ref="id10"/>
+		<transition id="id14">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="-740" y="150">bootstrap_request[id]!</label>
+			<label kind="assignment" x="-740" y="170">bootstrap_request_pending[id] = true,
+client_state[id] = CLIENT_STATE_BOOTSTRAPPING,
+retry = 0,
+t = 0</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="guard" x="-450" y="80">bootstrap_config_pending[id]</label>
+			<label kind="assignment" x="-450" y="100">bootstrap_config_pending[id] = false,
+client_bootstrapped[id] = true,
+client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+bootstrap_completed_count = bootstrap_completed_count + 1,
+t = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id11"/>
+			<label kind="guard" x="-520" y="270">t &gt;= ACK_TIMEOUT &amp;&amp; retry &lt; MAX_RETRANSMIT</label>
+			<label kind="synchronisation" x="-520" y="290">bootstrap_request[id]!</label>
+			<label kind="assignment" x="-520" y="310">retry = retry + 1,
+retransmission_count[id] = retransmission_count[id] + 1,
+bootstrap_request_pending[id] = true,
+t = 0</label>
+			<nail x="-580" y="340"/>
+			<nail x="-340" y="340"/>
+		</transition>
+		<transition id="id17">
+			<source ref="id11"/>
+			<target ref="id13"/>
+			<label kind="guard" x="-450" y="240">t &gt;= ACK_TIMEOUT &amp;&amp; retry &gt;= MAX_RETRANSMIT</label>
+			<label kind="assignment" x="-450" y="260">bootstrap_failed[id] = true,
+client_state[id] = CLIENT_STATE_ERROR,
+t = 0</label>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+BootstrapServer0 = BootstrapServer(0);
+
+system Client0, BootstrapServer0;</system>
+	<queries>
+		<query>
+			<formula>Pr[&lt;=21000; 200] (&lt;&gt; client_bootstrapped[0])</formula>
+			<comment>Probability that the shopfloor device completes Bootstrap before the onboarding deadline.</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=21000; 200] (&lt;&gt; bootstrap_failed[0])</formula>
+			<comment>Probability that Bootstrap fails after maximum retransmissions.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=21000; 200] (max: retransmission_count[0])</formula>
+			<comment>Expected maximum retransmission count.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=21000; 200] (max: config_loss_count[0])</formula>
+			<comment>Expected maximum lost configuration messages.</comment>
+		</query>
+	</queries>
+</nta>

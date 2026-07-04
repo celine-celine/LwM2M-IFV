@@ -1,0 +1,3 @@
+Estimate the onboarding reliability of a shop-floor LwM2M endpoint when DTLS or
+OSCORE security overhead, low LAN packet loss, timeout, and retransmission are
+enabled for bootstrap and registration.

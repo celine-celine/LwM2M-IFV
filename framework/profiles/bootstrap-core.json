@@ -1,0 +1,32 @@
+{
+  "profile_id": "bootstrap-core",
+  "procedure": "bootstrap",
+  "lwm2m_version": "1.2",
+  "description": "Protected Bootstrap core with DTLS-style blocking of fake Bootstrap Server and MITM tampering paths.",
+  "model": "framework/generated/bootstrap/Bootstrap_Core.xml",
+  "security": {
+    "dtls_enabled": true,
+    "server_authentication": true,
+    "config_integrity": true
+  },
+  "attacker": {
+    "mitm_enabled": true,
+    "fake_bootstrap_server_enabled": true,
+    "attack_success_expected": false
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "both_clients_bootstrap": 1,
+    "bootstrap_requires_verified_config": 2,
+    "fake_config_rejected": 3,
+    "tampered_config_rejected": 4,
+    "dtls_blocks_fake_and_tamper": 5
+  },
+  "primary_query": "deadlock_freedom",
+  "industrial_properties": [
+    "secure_device_onboarding",
+    "valid_config_required",
+    "fake_server_blocking",
+    "tamper_blocking"
+  ]
+}

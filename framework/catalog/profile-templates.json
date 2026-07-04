@@ -1,0 +1,251 @@
+{
+  "version": "prototype-0.2",
+  "description": "Profile templates define bounded configurable capabilities. Executable profiles are instances selected from these templates.",
+  "templates": [
+    {
+      "template_id": "registration_identity_binding_template",
+      "layer": "configurable_profile",
+      "supported_intents": [
+        "duplicate_endpoint_rejection"
+      ],
+      "summary": "Endpoint identity binding and duplicate endpoint rejection during Registration.",
+      "executable_profiles": [
+        "registration-identity-binding"
+      ],
+      "default_queries": {
+        "registration-identity-binding": [
+          "duplicate_endpoint_rejected",
+          "clone_not_authorized",
+          "commands_require_identity_binding"
+        ]
+      },
+      "parameters": {
+        "identity_binding_required": {
+          "type": "boolean",
+          "default": true
+        },
+        "duplicate_endpoint_policy": {
+          "type": "enum",
+          "values": [
+            "reject"
+          ],
+          "default": "reject"
+        }
+      },
+      "unsupported_scope": [
+        "firmware identity",
+        "certificate revocation",
+        "large-scale endpoint registry semantics"
+      ]
+    },
+    {
+      "template_id": "registration_bootstrap_binding_template",
+      "layer": "configurable_profile",
+      "supported_intents": [
+        "secure_bootstrap_registration_admission"
+      ],
+      "summary": "Bootstrap-to-Registration server identity and credential binding.",
+      "executable_profiles": [
+        "registration-bootstrap-binding"
+      ],
+      "default_queries": {
+        "registration-bootstrap-binding": [
+          "bound_registration_reachable",
+          "binding_violation_rejected",
+          "commands_require_binding"
+        ]
+      },
+      "parameters": {
+        "bootstrap_registration_binding": {
+          "type": "boolean",
+          "default": true
+        },
+        "server_identity_binding": {
+          "type": "boolean",
+          "default": true
+        },
+        "credential_binding": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "unsupported_scope": [
+        "certificate chain validation",
+        "key rotation",
+        "post-bootstrap credential renewal"
+      ]
+    },
+    {
+      "template_id": "registration_cleanup_template",
+      "layer": "configurable_profile",
+      "supported_intents": [
+        "offline_cleanup_policy"
+      ],
+      "summary": "Deregister and abnormal-offline cleanup with command authorization revocation.",
+      "executable_profiles": [
+        "registration-deregister-offline"
+      ],
+      "default_queries": {
+        "registration-deregister-offline": [
+          "deregister_reachable",
+          "offline_cleanup_reachable",
+          "deregister_disables_commands",
+          "offline_cleanup_disables_commands"
+        ]
+      },
+      "parameters": {
+        "deregister_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "abnormal_offline_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "cleanup_policy_enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "unsupported_scope": [
+        "distributed cluster cleanup",
+        "persistent storage recovery",
+        "manual operator override"
+      ]
+    },
+    {
+      "template_id": "industrial_policy_monitor_template",
+      "layer": "industrial_scenario",
+      "supported_intents": [
+        "duplicate_endpoint_rejection",
+        "secure_bootstrap_registration_admission",
+        "offline_cleanup_policy"
+      ],
+      "summary": "PolicyMonitor projection from lifecycle evidence to command authorization, clone rejection, and cleanup decisions.",
+      "executable_profiles": [
+        "industrial-policy-binding-cleanup"
+      ],
+      "default_queries": {
+        "industrial-policy-binding-cleanup": [
+          "commands_require_verified_active_session",
+          "rejected_clone_not_authorized",
+          "cleanup_revokes_authorization"
+        ]
+      },
+      "parameters": {
+        "policy_monitor_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "command_authorization_revoked_on_cleanup": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "unsupported_scope": [
+        "continuous control logic",
+        "PLC program semantics",
+        "operator role-based access control"
+      ]
+    },
+    {
+      "template_id": "observation_reliability_template",
+      "layer": "configurable_profile",
+      "supported_intents": [
+        "telemetry_freshness_under_loss"
+      ],
+      "summary": "Long-lived Observe reliability and freshness under loss, ACK, Reset, and bounded notification cycles.",
+      "executable_profiles": [
+        "observation-long-lived-reset-smc"
+      ],
+      "default_queries": {
+        "observation-long-lived-reset-smc": [
+          "notification_delivery",
+          "bounded_cycle_completion_probability",
+          "reset_probability",
+          "expected_received",
+          "expected_lost"
+        ]
+      },
+      "parameters": {
+        "oscore_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "retransmission_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "network_loss_profile": {
+          "type": "enum",
+          "values": [
+            "shop_floor_lan_low_loss"
+          ],
+          "default": "shop_floor_lan_low_loss"
+        },
+        "observation_reset_enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "unsupported_scope": [
+        "unbounded observation lifetime",
+        "application-level sensor plausibility",
+        "multi-hop gateway telemetry aggregation"
+      ]
+    },
+    {
+      "template_id": "onboarding_reliability_template",
+      "layer": "configurable_profile",
+      "supported_intents": [
+        "onboarding_reliability"
+      ],
+      "summary": "Bootstrap and Registration SMC reliability under security overhead, loss, timeout, and retransmission.",
+      "executable_profiles": [
+        "bootstrap-smc",
+        "registration-smc"
+      ],
+      "default_queries": {
+        "bootstrap-smc": [
+          "bootstrap_success_probability",
+          "bootstrap_failure_probability",
+          "expected_retransmission_count",
+          "expected_config_loss_count"
+        ],
+        "registration-smc": [
+          "registration_success_probability",
+          "registration_failure_probability",
+          "expected_retransmission_count",
+          "expected_lost_registration_messages"
+        ]
+      },
+      "parameters": {
+        "security_overhead_profile": {
+          "type": "enum",
+          "values": [
+            "dtls_or_oscore_bounded"
+          ],
+          "default": "dtls_or_oscore_bounded"
+        },
+        "network_loss_profile": {
+          "type": "enum",
+          "values": [
+            "shop_floor_lan_low_loss"
+          ],
+          "default": "shop_floor_lan_low_loss"
+        },
+        "max_retransmit": {
+          "type": "integer",
+          "default": 4,
+          "min": 0,
+          "max": 4
+        }
+      },
+      "unsupported_scope": [
+        "unbounded client population",
+        "dynamic rate adaptation",
+        "physical-layer interference model"
+      ]
+    }
+  ]
+}

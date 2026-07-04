@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Deregister / Abnormal Offline Cleanup profile model.
+// The model extends Registration with normal Deregister and abnormal offline
+// cleanup. It links protocol cleanup to industrial command authorization.
+
+const int MAX_CLIENTS = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTERED = 3;
+const int CLIENT_STATE_DEREGISTERING = 4;
+const int CLIENT_STATE_DEREGISTERED = 5;
+const int CLIENT_STATE_OFFLINE = 6;
+
+const bool CLEANUP_POLICY_ENABLED = true;
+
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan deregister_start[MAX_CLIENTS];
+chan deregister_ack[MAX_CLIENTS];
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool object_list_received[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_ack_received[MAX_CLIENTS];
+bool deregister_requested[MAX_CLIENTS];
+bool deregister_ack_received[MAX_CLIENTS];
+bool device_offline[MAX_CLIENTS];
+bool offline_cleanup_done[MAX_CLIENTS];
+bool server_session_active[MAX_CLIENTS];
+bool command_authorized[MAX_CLIENTS];
+int client_state[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id0" x="-760" y="100">
+			<name x="-770" y="66">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id1" x="-500" y="100">
+			<name x="-560" y="66">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-240" y="100">
+			<name x="-300" y="66">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id3" x="20" y="100">
+			<name x="-30" y="66">S_WAIT_REGISTER_ACK</name>
+		</location>
+		<location id="id4" x="300" y="100">
+			<name x="260" y="66">S_REGISTERED</name>
+		</location>
+		<location id="id5" x="580" y="0">
+			<name x="520" y="-34">S_SEND_DEREGISTER</name>
+			<committed/>
+		</location>
+		<location id="id6" x="840" y="0">
+			<name x="780" y="-34">S_WAIT_DEREGISTER_ACK</name>
+		</location>
+		<location id="id7" x="1120" y="0">
+			<name x="1080" y="-34">S_DEREGISTERED</name>
+		</location>
+		<location id="id8" x="580" y="220">
+			<name x="540" y="186">S_OFFLINE</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id9">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="40">bootstrap_completed[id]</label>
+			<label kind="assignment" x="-750" y="60">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-490" y="70">register_start[id]!</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-230" y="70">register_objects[id]!</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="30" y="70">register_ack[id]?</label>
+			<label kind="assignment" x="30" y="90">registration_ack_received[id] = true,
+client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id4"/>
+			<target ref="id5"/>
+			<label kind="assignment" x="310" y="0">client_state[id] = CLIENT_STATE_DEREGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id4"/>
+			<target ref="id8"/>
+			<label kind="assignment" x="310" y="200">device_offline[id] = true,
+client_registered[id] = false,
+client_state[id] = CLIENT_STATE_OFFLINE</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="590" y="-30">deregister_start[id]!</label>
+			<label kind="assignment" x="590" y="-10">deregister_requested[id] = true</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="850" y="-30">deregister_ack[id]?</label>
+			<label kind="assignment" x="850" y="-10">deregister_ack_received[id] = true,
+client_registered[id] = false,
+client_state[id] = CLIENT_STATE_DEREGISTERED</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id7"/>
+			<target ref="id7"/>
+			<nail x="1060" y="-60"/>
+			<nail x="1180" y="-60"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id8"/>
+			<target ref="id8"/>
+			<nail x="520" y="280"/>
+			<nail x="640" y="280"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id19" x="-760" y="-340">
+			<name x="-770" y="-374">S_INIT</name>
+			<committed/>
+		</location>
+		<location id="id20" x="-500" y="-340">
+			<name x="-560" y="-374">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id21" x="-240" y="-340">
+			<name x="-300" y="-374">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id22" x="20" y="-340">
+			<name x="-40" y="-374">S_VALIDATE</name>
+			<committed/>
+		</location>
+		<location id="id23" x="300" y="-340">
+			<name x="240" y="-374">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id24" x="580" y="-340">
+			<name x="540" y="-374">S_ACTIVE</name>
+		</location>
+		<location id="id25" x="860" y="-460">
+			<name x="800" y="-494">S_CLEAN_DEREGISTER</name>
+			<committed/>
+		</location>
+		<location id="id26" x="1140" y="-460">
+			<name x="1080" y="-494">S_SEND_DEREG_ACK</name>
+			<committed/>
+		</location>
+		<location id="id27" x="860" y="-220">
+			<name x="800" y="-254">S_CLEAN_OFFLINE</name>
+			<committed/>
+		</location>
+		<location id="id28" x="1140" y="-220">
+			<name x="1100" y="-254">S_CLEANED</name>
+		</location>
+		<init ref="id19"/>
+		<transition id="id29">
+			<source ref="id19"/>
+			<target ref="id20"/>
+			<label kind="assignment" x="-750" y="-320">bootstrap_completed[id] = true,
+client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE</label>
+		</transition>
+		<transition id="id30">
+			<source ref="id20"/>
+			<target ref="id21"/>
+			<label kind="synchronisation" x="-490" y="-370">register_start[id]?</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id21"/>
+			<target ref="id22"/>
+			<label kind="synchronisation" x="-230" y="-370">register_objects[id]?</label>
+			<label kind="assignment" x="-230" y="-350">object_list_received[id] = true</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id22"/>
+			<target ref="id23"/>
+			<label kind="guard" x="20" y="-410">client_message_id[id] &gt; server_last_msg_id[id]</label>
+			<label kind="assignment" x="20" y="-390">server_last_msg_id[id] = client_message_id[id]</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="synchronisation" x="310" y="-370">register_ack[id]!</label>
+			<label kind="assignment" x="310" y="-350">server_session_active[id] = true,
+command_authorized[id] = true</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="590" y="-470">deregister_start[id]?</label>
+			<label kind="assignment" x="590" y="-450">deregister_requested[id] = true</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id24"/>
+			<target ref="id27"/>
+			<label kind="guard" x="590" y="-250">CLEANUP_POLICY_ENABLED &amp;&amp; device_offline[id]</label>
+		</transition>
+		<transition id="id36">
+			<source ref="id24"/>
+			<target ref="id24"/>
+			<label kind="guard" x="560" y="-310">!device_offline[id]</label>
+			<nail x="520" y="-280"/>
+			<nail x="640" y="-280"/>
+		</transition>
+		<transition id="id37">
+			<source ref="id25"/>
+			<target ref="id26"/>
+			<label kind="assignment" x="870" y="-430">server_session_active[id] = false,
+command_authorized[id] = false</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id26"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="1150" y="-430">deregister_ack[id]!</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="assignment" x="870" y="-190">offline_cleanup_done[id] = true,
+server_session_active[id] = false,
+command_authorized[id] = false</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id28"/>
+			<target ref="id28"/>
+			<nail x="1080" y="-160"/>
+			<nail x="1200" y="-160"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+RegistrationServer0 = RegistrationServer(0);
+
+system Client0, RegistrationServer0;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom for Deregister and abnormal offline cleanup.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; deregister_ack_received[0]</formula>
+			<comment>A registered client can explicitly deregister.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; offline_cleanup_done[0]</formula>
+			<comment>The server can clean up an abnormally offline device.</comment>
+		</query>
+		<query>
+			<formula>A[] deregister_ack_received[0] imply !server_session_active[0]</formula>
+			<comment>A deregistered device cannot retain an active server session.</comment>
+		</query>
+		<query>
+			<formula>A[] offline_cleanup_done[0] imply !server_session_active[0]</formula>
+			<comment>An offline-cleaned device cannot retain an active server session.</comment>
+		</query>
+		<query>
+			<formula>A[] command_authorized[0] imply server_session_active[0] and !deregister_ack_received[0] and !offline_cleanup_done[0]</formula>
+			<comment>Commands are authorized only before explicit or abnormal cleanup.</comment>
+		</query>
+		<query>
+			<formula>A[] deregister_ack_received[0] imply !command_authorized[0]</formula>
+			<comment>Deregister cleanup disables command authorization.</comment>
+		</query>
+		<query>
+			<formula>A[] offline_cleanup_done[0] imply !command_authorized[0]</formula>
+			<comment>Abnormal offline cleanup disables command authorization.</comment>
+		</query>
+	</queries>
+</nta>

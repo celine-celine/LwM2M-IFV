@@ -1,0 +1,37 @@
+{
+  "profile_id": "registration-smc",
+  "procedure": "registration",
+  "lwm2m_version": "1.2",
+  "description": "SMC Registration reliability profile with DTLS delay, registration/object-list loss, timeout, retransmission, and an admission deadline.",
+  "model": "framework/generated/registration/Registration_SMC.xml",
+  "security": {
+    "dtls_enabled": true,
+    "dtls_delay": 50
+  },
+  "transport": {
+    "ack_timeout": 2000,
+    "max_retransmit": 4
+  },
+  "network": {
+    "register_success_weight": 995,
+    "register_loss_weight": 5,
+    "object_success_weight": 995,
+    "object_loss_weight": 5
+  },
+  "deadline": {
+    "registration_deadline": 21000
+  },
+  "queries": {
+    "registration_success_probability": 0,
+    "registration_failure_probability": 1,
+    "expected_retransmission_count": 2,
+    "expected_lost_registration_messages": 3
+  },
+  "primary_query": "registration_success_probability",
+  "industrial_properties": [
+    "shopfloor_admission_probability",
+    "registration_deadline",
+    "retransmission_reliability",
+    "object_list_loss_expectation"
+  ]
+}

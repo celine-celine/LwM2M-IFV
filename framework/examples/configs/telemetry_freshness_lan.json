@@ -1,0 +1,69 @@
+{
+  "requirement_id": "telemetry_freshness_lan_demo",
+  "source_text": "The monitoring application should accept telemetry only when it belongs to a fresh observation relation. The plant network is a low-loss LAN, but occasional packet loss, retransmission, and Reset behavior should be considered.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "telemetry_freshness_under_loss"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "sensor_or_plc_endpoint"
+      }
+    ]
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate telemetry freshness under bounded observation loss.",
+    "Consider retransmission and Reset behavior."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "The unspecified LAN loss rate is mapped to the predefined shop_floor_lan_low_loss profile.",
+    "Telemetry freshness is represented by the bounded long-lived observation SMC profile."
+  ],
+  "profile_instances": [
+    {
+      "template": "observation_reliability_template",
+      "profile": "observation-long-lived-reset-smc",
+      "queries": [
+        "notification_delivery",
+        "bounded_cycle_completion_probability",
+        "reset_probability",
+        "expected_received",
+        "expected_lost"
+      ],
+      "parameters": {
+        "oscore_enabled": true,
+        "retransmission_enabled": true,
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "observation_reset_enabled": true
+      }
+    }
+  ],
+  "selected_profiles": [
+    "observation-long-lived-reset-smc"
+  ],
+  "query_selection": [
+    {
+      "profile": "observation-long-lived-reset-smc",
+      "queries": [
+        "notification_delivery",
+        "bounded_cycle_completion_probability",
+        "reset_probability",
+        "expected_received",
+        "expected_lost"
+      ]
+    }
+  ],
+  "parameters": {
+    "oscore_enabled": true,
+    "retransmission_enabled": true,
+    "network_loss_profile": "shop_floor_lan_low_loss",
+    "freshness_deadline_profile": "bounded_control_monitoring",
+    "observation_reset_enabled": true
+  }
+}

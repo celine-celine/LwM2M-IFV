@@ -1,0 +1,32 @@
+{
+  "profile_id": "lwm2m-1.0-basic",
+  "lwm2m_version": "1.0",
+  "description": "Baseline LwM2M lifecycle over CoAP/UDP without gateway support.",
+  "interfaces": ["bootstrap", "registration", "observation"],
+  "transport": {
+    "binding": "coap_udp",
+    "ack_timeout": 10000,
+    "max_retransmit": 0,
+    "retransmission_enabled": false
+  },
+  "security": {
+    "mode": "none",
+    "oscore_enabled": false,
+    "dtls_enabled": false
+  },
+  "network": {
+    "loss_probability": 0.005
+  },
+  "deployment": {
+    "mes_count": 1,
+    "gateway_count": 0,
+    "client_count": 2,
+    "client_roles": ["sensor", "actuator"]
+  },
+  "properties": [
+    "deadlock_freedom",
+    "bootstrap_reachability",
+    "registration_reachability",
+    "observation_completion"
+  ]
+}

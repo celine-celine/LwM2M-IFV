@@ -1,0 +1,30 @@
+{
+  "profile_id": "registration-core",
+  "procedure": "registration",
+  "lwm2m_version": "1.2",
+  "description": "Protected Registration core profile with bootstrap prerequisite, object list submission, message id freshness, and multi-client registration.",
+  "model": "framework/generated/registration/Registration_Core.xml",
+  "security": {
+    "bootstrap_required": true,
+    "message_id_freshness": true,
+    "dtls_enabled": true
+  },
+  "registration": {
+    "clients": 2,
+    "object_list_required": true
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "both_clients_register": 1,
+    "registration_requires_bootstrap": 2,
+    "registration_requires_object_list": 3,
+    "registered_message_id_is_current": 4
+  },
+  "primary_query": "deadlock_freedom",
+  "industrial_properties": [
+    "authorized_device_admission",
+    "bootstrap_before_registration",
+    "object_inventory_submission",
+    "message_freshness"
+  ]
+}

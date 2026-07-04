@@ -1,0 +1,503 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Industrial Policy Monitor scenario.
+// This specific-layer model composes selected Registration profiles:
+// Bootstrap-to-Registration binding, endpoint identity binding, cloned-device
+// rejection, and Deregister/offline cleanup. The PolicyMonitor automaton
+// converts protocol/profile evidence into industrial predicates.
+
+const int MAX_CLIENTS = 2;
+const int ENDPOINT_COUNT = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+typedef int[0, ENDPOINT_COUNT-1] endpoint_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTERED = 3;
+const int CLIENT_STATE_REJECTED = 4;
+const int CLIENT_STATE_DEREGISTERING = 5;
+const int CLIENT_STATE_DEREGISTERED = 6;
+const int CLIENT_STATE_OFFLINE = 7;
+
+const int AUTHORIZED_SERVER_ID = 10;
+const int BOOTSTRAPPED_CREDENTIAL = 700;
+const int DUPLICATE_ENDPOINT_ID = 0;
+const int OWNER_NONE = 0;
+const int OWNER_CLIENT0 = 1;
+const int OWNER_CLIENT1 = 2;
+const int LEGIT_SECRET = 321;
+const int CLONE_SECRET = 999;
+
+const bool BINDING_ENABLED = true;
+const bool IDENTITY_BINDING_ENABLED = true;
+const bool DUPLICATE_ENDPOINT_DETECTION_ENABLED = true;
+const bool CLEANUP_POLICY_ENABLED = true;
+
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan register_reject[MAX_CLIENTS];
+chan deregister_start[MAX_CLIENTS];
+chan deregister_ack[MAX_CLIENTS];
+
+chan policy_admit[MAX_CLIENTS];
+chan policy_clone_reject[MAX_CLIENTS];
+chan policy_deregister_cleanup[MAX_CLIENTS];
+chan policy_offline_cleanup[MAX_CLIENTS];
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool object_list_received[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_rejected[MAX_CLIENTS];
+bool registration_ack_received[MAX_CLIENTS];
+bool deregister_requested[MAX_CLIENTS];
+bool deregister_ack_received[MAX_CLIENTS];
+bool device_offline[MAX_CLIENTS];
+bool offline_cleanup_done[MAX_CLIENTS];
+bool server_session_active[MAX_CLIENTS];
+
+bool binding_verified[MAX_CLIENTS];
+bool identity_binding_verified[MAX_CLIENTS];
+bool duplicate_endpoint_detected = false;
+bool identity_mismatch_detected = false;
+bool cloned_device_detected = false;
+bool attack_detected = false;
+
+bool command_authorized[MAX_CLIENTS];
+bool policy_admission_granted[MAX_CLIENTS];
+bool cloned_device_rejected[MAX_CLIENTS];
+bool cloned_device_alarm = false;
+bool stale_session_cleaned[MAX_CLIENTS];
+bool session_cleanup_done[MAX_CLIENTS];
+
+int client_state[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+int endpoint_id[MAX_CLIENTS];
+int bootstrapped_server_id[MAX_CLIENTS];
+int registration_server_id[MAX_CLIENTS];
+int bootstrapped_credential[MAX_CLIENTS];
+int registration_credential[MAX_CLIENTS];
+int provisioned_identity_secret[MAX_CLIENTS];
+int presented_identity_secret[MAX_CLIENTS];
+int owner_code[MAX_CLIENTS];
+int server_session_owner[ENDPOINT_COUNT];
+int registration_turn = 0;
+int current_client = 0;
+</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id0" x="-760" y="80">
+			<name x="-770" y="46">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id1" x="-460" y="80">
+			<name x="-520" y="46">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-160" y="80">
+			<name x="-220" y="46">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id3" x="140" y="80">
+			<name x="90" y="46">S_WAIT_RESULT</name>
+		</location>
+		<location id="id4" x="440" y="0">
+			<name x="400" y="-34">S_REGISTERED</name>
+		</location>
+		<location id="id5" x="440" y="180">
+			<name x="400" y="146">S_REJECTED</name>
+		</location>
+		<location id="id6" x="740" y="-120">
+			<name x="680" y="-154">S_SEND_DEREGISTER</name>
+			<committed/>
+		</location>
+		<location id="id7" x="1040" y="-120">
+			<name x="980" y="-154">S_WAIT_DEREGISTER_ACK</name>
+		</location>
+		<location id="id8" x="1340" y="-120">
+			<name x="1290" y="-154">S_DEREGISTERED</name>
+		</location>
+		<location id="id9" x="740" y="180">
+			<name x="700" y="146">S_OFFLINE</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id10">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="20">bootstrap_completed[id] &amp;&amp; id == registration_turn</label>
+			<label kind="assignment" x="-750" y="40">client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-450" y="50">register_start[id]!</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-150" y="50">register_objects[id]!</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="150" y="0">register_ack[id]?</label>
+			<label kind="assignment" x="150" y="20">registration_ack_received[id] = true,
+client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id3"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="150" y="170">register_reject[id]?</label>
+			<label kind="assignment" x="150" y="190">registration_rejected[id] = true,
+client_state[id] = CLIENT_STATE_REJECTED</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id4"/>
+			<target ref="id6"/>
+			<label kind="guard" x="460" y="-120">id == 0 &amp;&amp; current_client &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="460" y="-100">client_state[id] = CLIENT_STATE_DEREGISTERING,
+client_message_id[id] = client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id4"/>
+			<target ref="id9"/>
+			<label kind="guard" x="460" y="160">id == 0 &amp;&amp; current_client &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="460" y="180">device_offline[id] = true,
+client_registered[id] = false,
+client_state[id] = CLIENT_STATE_OFFLINE</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="750" y="-150">deregister_start[id]!</label>
+			<label kind="assignment" x="750" y="-130">deregister_requested[id] = true</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id7"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="1050" y="-150">deregister_ack[id]?</label>
+			<label kind="assignment" x="1050" y="-130">deregister_ack_received[id] = true,
+client_registered[id] = false,
+client_state[id] = CLIENT_STATE_DEREGISTERED</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<nail x="380" y="240"/>
+			<nail x="500" y="240"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id8"/>
+			<target ref="id8"/>
+			<nail x="1280" y="-60"/>
+			<nail x="1400" y="-60"/>
+		</transition>
+		<transition id="id21">
+			<source ref="id9"/>
+			<target ref="id9"/>
+			<nail x="680" y="240"/>
+			<nail x="800" y="240"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<location id="id22" x="-760" y="-420">
+			<name x="-770" y="-454">S_INIT</name>
+			<committed/>
+		</location>
+		<location id="id23" x="-500" y="-420">
+			<name x="-560" y="-454">S_SELECT_CLIENT</name>
+			<committed/>
+		</location>
+		<location id="id24" x="-220" y="-420">
+			<name x="-280" y="-454">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id25" x="60" y="-420">
+			<name x="0" y="-454">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id26" x="340" y="-420">
+			<name x="280" y="-454">S_VALIDATE</name>
+			<committed/>
+		</location>
+		<location id="id27" x="620" y="-540">
+			<name x="560" y="-574">S_POLICY_ADMIT</name>
+			<committed/>
+		</location>
+		<location id="id28" x="900" y="-540">
+			<name x="840" y="-574">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id29" x="620" y="-300">
+			<name x="560" y="-334">S_POLICY_REJECT</name>
+			<committed/>
+		</location>
+		<location id="id30" x="900" y="-300">
+			<name x="840" y="-334">S_SEND_REJECT</name>
+			<committed/>
+		</location>
+		<location id="id31" x="-500" y="-140">
+			<name x="-540" y="-174">S_ACTIVE</name>
+		</location>
+		<location id="id32" x="-220" y="-260">
+			<name x="-300" y="-294">S_POLICY_DEREGISTER</name>
+			<committed/>
+		</location>
+		<location id="id33" x="60" y="-260">
+			<name x="-10" y="-294">S_SEND_DEREG_ACK</name>
+			<committed/>
+		</location>
+		<location id="id34" x="-220" y="-20">
+			<name x="-290" y="-54">S_POLICY_OFFLINE</name>
+			<committed/>
+		</location>
+		<location id="id35" x="60" y="-20">
+			<name x="20" y="-54">S_CLEANED</name>
+		</location>
+		<init ref="id22"/>
+		<transition id="id36">
+			<source ref="id22"/>
+			<target ref="id23"/>
+			<label kind="assignment" x="-750" y="-400">bootstrap_completed[0] = true,
+bootstrap_completed[1] = true,
+client_state[0] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+client_state[1] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+endpoint_id[0] = DUPLICATE_ENDPOINT_ID,
+endpoint_id[1] = DUPLICATE_ENDPOINT_ID,
+bootstrapped_server_id[0] = AUTHORIZED_SERVER_ID,
+bootstrapped_server_id[1] = AUTHORIZED_SERVER_ID,
+bootstrapped_credential[0] = BOOTSTRAPPED_CREDENTIAL,
+bootstrapped_credential[1] = BOOTSTRAPPED_CREDENTIAL,
+registration_server_id[0] = AUTHORIZED_SERVER_ID,
+registration_server_id[1] = AUTHORIZED_SERVER_ID,
+registration_credential[0] = BOOTSTRAPPED_CREDENTIAL,
+registration_credential[1] = BOOTSTRAPPED_CREDENTIAL,
+provisioned_identity_secret[0] = LEGIT_SECRET,
+provisioned_identity_secret[1] = LEGIT_SECRET,
+presented_identity_secret[0] = LEGIT_SECRET,
+presented_identity_secret[1] = CLONE_SECRET,
+owner_code[0] = OWNER_CLIENT0,
+owner_code[1] = OWNER_CLIENT1,
+current_client = 0,
+registration_turn = 0</label>
+		</transition>
+		<transition id="id37">
+			<source ref="id23"/>
+			<target ref="id31"/>
+			<label kind="guard" x="-510" y="-250">current_client &gt;= MAX_CLIENTS</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="guard" x="-490" y="-480">current_client &lt; MAX_CLIENTS</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id24"/>
+			<target ref="id25"/>
+			<label kind="synchronisation" x="-210" y="-450">register_start[current_client]?</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id25"/>
+			<target ref="id26"/>
+			<label kind="synchronisation" x="70" y="-450">register_objects[current_client]?</label>
+			<label kind="assignment" x="70" y="-430">object_list_received[current_client] = true</label>
+		</transition>
+		<transition id="id41">
+			<source ref="id26"/>
+			<target ref="id27"/>
+			<label kind="guard" x="340" y="-620">(!BINDING_ENABLED ||
+(registration_server_id[current_client] == bootstrapped_server_id[current_client] &amp;&amp;
+registration_credential[current_client] == bootstrapped_credential[current_client])) &amp;&amp;
+(!IDENTITY_BINDING_ENABLED ||
+presented_identity_secret[current_client] == provisioned_identity_secret[current_client]) &amp;&amp;
+(!DUPLICATE_ENDPOINT_DETECTION_ENABLED ||
+server_session_owner[endpoint_id[current_client]] == OWNER_NONE)</label>
+			<label kind="assignment" x="340" y="-520">binding_verified[current_client] = true,
+identity_binding_verified[current_client] = true,
+server_session_owner[endpoint_id[current_client]] = owner_code[current_client],
+server_session_active[current_client] = true,
+server_last_msg_id[current_client] = client_message_id[current_client]</label>
+		</transition>
+		<transition id="id42">
+			<source ref="id26"/>
+			<target ref="id29"/>
+			<label kind="guard" x="340" y="-360">(BINDING_ENABLED &amp;&amp;
+(registration_server_id[current_client] != bootstrapped_server_id[current_client] ||
+registration_credential[current_client] != bootstrapped_credential[current_client])) ||
+(IDENTITY_BINDING_ENABLED &amp;&amp;
+presented_identity_secret[current_client] != provisioned_identity_secret[current_client]) ||
+(DUPLICATE_ENDPOINT_DETECTION_ENABLED &amp;&amp;
+server_session_owner[endpoint_id[current_client]] != OWNER_NONE)</label>
+			<label kind="assignment" x="340" y="-220">duplicate_endpoint_detected =
+server_session_owner[endpoint_id[current_client]] != OWNER_NONE,
+identity_mismatch_detected =
+presented_identity_secret[current_client] != provisioned_identity_secret[current_client],
+cloned_device_detected = current_client == 1,
+attack_detected = true,
+server_session_active[current_client] = false</label>
+		</transition>
+		<transition id="id43">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="synchronisation" x="630" y="-570">policy_admit[current_client]!</label>
+		</transition>
+		<transition id="id44">
+			<source ref="id28"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="910" y="-570">register_ack[current_client]!</label>
+			<label kind="assignment" x="910" y="-550">current_client = current_client + 1,
+registration_turn = registration_turn + 1</label>
+		</transition>
+		<transition id="id45">
+			<source ref="id29"/>
+			<target ref="id30"/>
+			<label kind="synchronisation" x="630" y="-330">policy_clone_reject[current_client]!</label>
+		</transition>
+		<transition id="id46">
+			<source ref="id30"/>
+			<target ref="id23"/>
+			<label kind="synchronisation" x="910" y="-330">register_reject[current_client]!</label>
+			<label kind="assignment" x="910" y="-310">current_client = current_client + 1,
+registration_turn = registration_turn + 1</label>
+		</transition>
+		<transition id="id47">
+			<source ref="id31"/>
+			<target ref="id32"/>
+			<label kind="synchronisation" x="-490" y="-280">deregister_start[0]?</label>
+			<label kind="assignment" x="-490" y="-260">deregister_requested[0] = true</label>
+		</transition>
+		<transition id="id48">
+			<source ref="id32"/>
+			<target ref="id33"/>
+			<label kind="synchronisation" x="-210" y="-290">policy_deregister_cleanup[0]!</label>
+			<label kind="assignment" x="-210" y="-270">server_session_active[0] = false</label>
+		</transition>
+		<transition id="id49">
+			<source ref="id33"/>
+			<target ref="id35"/>
+			<label kind="synchronisation" x="70" y="-290">deregister_ack[0]!</label>
+		</transition>
+		<transition id="id50">
+			<source ref="id31"/>
+			<target ref="id34"/>
+			<label kind="guard" x="-490" y="-50">CLEANUP_POLICY_ENABLED &amp;&amp; device_offline[0]</label>
+		</transition>
+		<transition id="id51">
+			<source ref="id34"/>
+			<target ref="id35"/>
+			<label kind="synchronisation" x="-210" y="-50">policy_offline_cleanup[0]!</label>
+			<label kind="assignment" x="-210" y="-30">server_session_active[0] = false</label>
+		</transition>
+		<transition id="id52">
+			<source ref="id35"/>
+			<target ref="id35"/>
+			<nail x="0" y="40"/>
+			<nail x="120" y="40"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">PolicyMonitor</name>
+		<location id="id53" x="0" y="0">
+			<name x="-60" y="-34">S_MONITOR</name>
+		</location>
+		<init ref="id53"/>
+		<transition id="id54">
+			<source ref="id53"/>
+			<target ref="id53"/>
+			<label kind="select" x="-136" y="-272">c : client_id_t</label>
+			<label kind="guard" x="-136" y="-255">binding_verified[c] &amp;&amp;
+identity_binding_verified[c] &amp;&amp;
+server_session_active[c]</label>
+			<label kind="synchronisation" x="-136" y="-190">policy_admit[c]?</label>
+			<label kind="assignment" x="-136" y="-170">command_authorized[c] = true,
+policy_admission_granted[c] = true</label>
+			<nail x="-120" y="-120"/>
+			<nail x="120" y="-120"/>
+		</transition>
+		<transition id="id55">
+			<source ref="id53"/>
+			<target ref="id53"/>
+			<label kind="select" x="-120" y="125">c : client_id_t</label>
+			<label kind="synchronisation" x="-119" y="150">policy_clone_reject[c]?</label>
+			<label kind="assignment" x="-119" y="170">command_authorized[c] = false,
+cloned_device_rejected[c] = true,
+cloned_device_alarm = true</label>
+			<nail x="-119" y="110"/>
+			<nail x="120" y="109"/>
+		</transition>
+		<transition id="id56">
+			<source ref="id53"/>
+			<target ref="id53"/>
+			<label kind="select" x="170" y="-60">c : client_id_t</label>
+			<label kind="synchronisation" x="170" y="-37">policy_deregister_cleanup[c]?</label>
+			<label kind="assignment" x="170" y="-17">command_authorized[c] = false,
+stale_session_cleaned[c] = true,
+session_cleanup_done[c] = true</label>
+			<nail x="153" y="-68"/>
+			<nail x="153" y="59"/>
+		</transition>
+		<transition id="id57">
+			<source ref="id53"/>
+			<target ref="id53"/>
+			<label kind="select" x="-433" y="-76">c : client_id_t</label>
+			<label kind="synchronisation" x="-433" y="-54">policy_offline_cleanup[c]?</label>
+			<label kind="assignment" x="-433" y="-34">command_authorized[c] = false,
+offline_cleanup_done[c] = true,
+stale_session_cleaned[c] = true,
+session_cleanup_done[c] = true</label>
+			<nail x="-144" y="59"/>
+			<nail x="-144" y="-68"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+Client1 = Client(1);
+RegistrationServer0 = RegistrationServer();
+PolicyMonitor0 = PolicyMonitor();
+
+system Client0, Client1, RegistrationServer0, PolicyMonitor0;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom for the industrial policy monitor scenario.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.S_REGISTERED and command_authorized[0]</formula>
+			<comment>The legitimate device can be admitted and command-authorized.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; duplicate_endpoint_detected and cloned_device_rejected[1]</formula>
+			<comment>The cloned duplicate endpoint is detected and rejected by policy.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; deregister_ack_received[0] and stale_session_cleaned[0]</formula>
+			<comment>Explicit Deregister leads to stale-session cleanup.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; offline_cleanup_done[0] and stale_session_cleaned[0]</formula>
+			<comment>Abnormal offline cleanup leads to stale-session cleanup.</comment>
+		</query>
+		<query>
+			<formula>A[] command_authorized[0] imply server_session_active[0] and binding_verified[0] and identity_binding_verified[0]</formula>
+			<comment>Command authorization requires an active, binding-verified, identity-verified session.</comment>
+		</query>
+		<query>
+			<formula>A[] cloned_device_rejected[1] imply !client_registered[1] and !command_authorized[1] and cloned_device_alarm</formula>
+			<comment>A rejected cloned endpoint cannot be registered or command-authorized.</comment>
+		</query>
+		<query>
+			<formula>A[] stale_session_cleaned[0] imply !server_session_active[0] and !command_authorized[0]</formula>
+			<comment>Stale-session cleanup removes both the server session and command authorization.</comment>
+		</query>
+		<query>
+			<formula>A[] duplicate_endpoint_detected imply attack_detected</formula>
+			<comment>Duplicate endpoint detection is treated as an industrial attack signal.</comment>
+		</query>
+		<query>
+			<formula>A[] !command_authorized[1]</formula>
+			<comment>The cloned client is never command-authorized.</comment>
+		</query>
+	</queries>
+</nta>

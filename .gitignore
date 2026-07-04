@@ -1,0 +1,38 @@
+# Local secrets and environment files
+.env
+.env.*
+*.secret
+*.key
+
+# Local Overleaf clone; keep the GitHub repository independent.
+overleaf-paper/
+
+# LLM-generated drafts and verification evidence reports
+framework/generated/configs/
+framework/generated/reports/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.xdv
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+~$*

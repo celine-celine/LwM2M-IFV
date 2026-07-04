@@ -1,0 +1,45 @@
+{
+  "profile_id": "observation-long-lived-reset-smc",
+  "procedure": "observation",
+  "lwm2m_version": "1.2",
+  "description": "SMC version of the improved long-lived Observation flow with stochastic Notify generation, packet loss, ACK, and Reset.",
+  "model": "framework/generated/observation/Observation_LongLived_Reset_SMC.xml",
+  "source_model": "framework/generated/observation/Observation_LongLived_Reset.xml",
+  "flow_adjustments": {
+    "long_lived_observe_relation": true,
+    "notify_does_not_immediately_stop_observation": true,
+    "coap_ack_enabled": true,
+    "coap_reset_enabled": true,
+    "server_cancel_after_bounded_notifications": true
+  },
+  "smc_parameters": {
+    "notification_rate": 0.01,
+    "notify_success_weight": 995,
+    "notify_loss_weight": 5,
+    "ack_weight": 990,
+    "reset_weight": 10,
+    "observation_deadline": 210000,
+    "max_notifications_per_observation": 2
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "workflow_completion": 1,
+    "multiple_notify_before_cancel": 2,
+    "reset_reachable": 3,
+    "reset_cancels_observation": 4,
+    "bounded_notification_count": 5,
+    "notification_delivery": 6,
+    "bounded_cycle_completion_probability": 7,
+    "reset_probability": 8,
+    "expected_received": 9,
+    "expected_lost": 10
+  },
+  "primary_query": "notification_delivery",
+  "industrial_properties": [
+    "long_lived_observation",
+    "reset_triggered_cancellation",
+    "bounded_monitoring_cycle",
+    "stochastic_delivery_probability",
+    "loss_expectation"
+  ]
+}

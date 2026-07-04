@@ -1,0 +1,31 @@
+{
+  "profile_id": "observation-non-non",
+  "procedure": "observation",
+  "lwm2m_version": "1.2",
+  "description": "Observation with no security and no retransmission.",
+  "model": "LwM2M Models/Level 3/Observation/Smc_Observation_Non_Non.xml",
+  "security": {
+    "mode": "none",
+    "security_overhead_enabled": false,
+    "freshness_protection_enabled": false
+  },
+  "transport": {
+    "confirmable_notify": false,
+    "retransmission_enabled": false
+  },
+  "network": {
+    "loss_weight_success": 995,
+    "loss_weight_failure": 5
+  },
+  "queries": {
+    "bounded_completion": 1,
+    "notification_sent": 2,
+    "notification_delivery": 3,
+    "expected_received": 4
+  },
+  "primary_query": "notification_delivery",
+  "industrial_properties": [
+    "notification_delivery_probability",
+    "bounded_observation_completion"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "profile_id": "observation-oscore-non",
+  "procedure": "observation",
+  "lwm2m_version": "1.2",
+  "description": "Observation with OSCORE-style security overhead and no retransmission.",
+  "model": "LwM2M Models/Level 3/Observation/Smc_Observation_OSCORE_Non.xml",
+  "security": {
+    "mode": "oscore",
+    "security_overhead_enabled": true,
+    "freshness_protection_enabled": true
+  },
+  "transport": {
+    "confirmable_notify": false,
+    "retransmission_enabled": false
+  },
+  "network": {
+    "loss_weight_success": 995,
+    "loss_weight_failure": 5
+  },
+  "queries": {
+    "expected_received": 0,
+    "notification_delivery": 1
+  },
+  "primary_query": "notification_delivery",
+  "industrial_properties": [
+    "notification_delivery_probability",
+    "security_overhead_throughput_proxy"
+  ]
+}

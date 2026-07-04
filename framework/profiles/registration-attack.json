@@ -1,0 +1,30 @@
+{
+  "profile_id": "registration-attack",
+  "procedure": "registration",
+  "lwm2m_version": "1.2",
+  "description": "No-DTLS Registration attack profile showing replay detection and DoS throttling during device admission.",
+  "model": "framework/generated/registration/Registration_Attack.xml",
+  "security": {
+    "dtls_enabled": false,
+    "message_id_freshness": true
+  },
+  "attacker": {
+    "replay_enabled": true,
+    "dos_enabled": true,
+    "max_dos_attacks": 2
+  },
+  "queries": {
+    "deadlock_freedom": 0,
+    "replay_reachable_and_detected": 1,
+    "dos_throttling_reachable": 2,
+    "replay_implies_detection": 3,
+    "dos_throttling_implies_detection": 4
+  },
+  "primary_query": "deadlock_freedom",
+  "industrial_properties": [
+    "replay_attack_detection",
+    "dos_throttling",
+    "registration_service_recovery",
+    "shopfloor_admission_protection"
+  ]
+}

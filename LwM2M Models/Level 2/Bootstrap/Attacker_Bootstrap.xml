@@ -1,0 +1,696 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// 常量定义
+const int MAX_CLIENTS = 2;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+// 客户端状态
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAPPING = 1;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 2;
+const int CLIENT_STATE_ERROR = 12;
+
+
+// 调试阶段常量
+const int PHASE_INIT = 0;
+const int PHASE_CREDENTIAL = 1;      // 在 S_BOOTSTRAP_CREDENTIAL
+const int PHASE_WAITING_CONFIG = 2;   // 在 S_WAITING_CONFIG
+const int PHASE_VERIFY = 3;           // 在 S_VERIFY_CONFIG
+const int PHASE_DONE = 4;             // 在 S_BOOTSTRAP_DONE
+const int PHASE_ERROR = 5;            // 在 S_ERROR
+
+int client_phase[MAX_CLIENTS];        // 初始默认为0（INIT）
+
+// 攻击模式
+const int NO_ATTACK = 0;
+const int MITM_ATTACK = 1;
+const int EAVESDROP_ATTACK = 2;
+const int FAKE_BS_ATTACK = 3;
+int attack_mode = MITM_ATTACK;   // 可手动切换
+
+// 标准 Bootstrap 通道（与 Level1 一致）
+chan bootstrap_start_client[MAX_CLIENTS];
+chan bootstrap_credential[MAX_CLIENTS];
+chan bootstrap_config[MAX_CLIENTS];
+
+// MITM 攻击专用通道（每个客户端独立）
+chan client_to_attacker_start[MAX_CLIENTS];
+chan attacker_to_server_start[MAX_CLIENTS];
+chan client_to_attacker_credential[MAX_CLIENTS];
+chan attacker_to_server_credential[MAX_CLIENTS];
+chan server_to_attacker_config[MAX_CLIENTS];
+chan attacker_to_client_config[MAX_CLIENTS];
+
+broadcast chan bootstrap_success[MAX_CLIENTS];
+broadcast chan bootstrap_error[MAX_CLIENTS];
+
+//BS chan
+chan fake_bs_start[MAX_CLIENTS];
+chan fake_bs_config[MAX_CLIENTS];
+
+
+// 共享变量
+int client_state[MAX_CLIENTS];
+bool client_bootstrapped[MAX_CLIENTS];
+int bootstrap_completed_count = 0;
+bool bootstrap_in_progress = false;
+
+// MITM 攻击变量
+bool mitm_active = false;
+int intercepted_messages = 0;
+const int MAX_INTERCEPTIONS = 10;
+bool message_tampered[MAX_CLIENTS];
+int tampered_config_value[MAX_CLIENTS];
+const int NORMAL_CONFIG = 100;
+const int TAMPERED_CONFIG = 999;
+const int FAKE_CONFIG = 666;
+bool config_verified[MAX_CLIENTS];
+
+// 客户端内部变量（用于验证）
+int received_config[MAX_CLIENTS];
+
+// 服务器内部变量
+bool client_processed[MAX_CLIENTS];
+int current_client = 0;
+
+//BS
+int client_bs_type[MAX_CLIENTS];
+
+//EAVESDROP
+bool credential_on_wire[MAX_CLIENTS];      // 凭证在网络上传输时置为true
+bool credential_leaked[MAX_CLIENTS];       // 凭证已被窃听者获取
+int eavesdrop_count = 0;                    // 窃听次数计数
+const int MAX_EAVESDROP = 10;                // 最大窃听次数（可选）</declaration>
+	<template>
+		<name>Attacker_MITM</name>
+		<parameter>const client_id_t target_id</parameter>
+		<declaration>bool active = false; 
+int delay = 0; 
+const int DELAY_MAX = 2;</declaration>
+		<location id="id0" x="-731" y="-212">
+			<name x="-782" y="-263">S_IDLE</name>
+		</location>
+		<location id="id1" x="773" y="-212">
+			<name x="671" y="-246">S_FORWARDING</name>
+		</location>
+		<location id="id2" x="-195" y="-212">
+			<name x="-246" y="-246">S_WAIT_CRED</name>
+		</location>
+		<location id="id3" x="204" y="-212">
+			<name x="161" y="-246">S_WAIT_CONFIG</name>
+		</location>
+		<location id="id4" x="468" y="-212">
+			<name x="417" y="-263">S_TAMPERING</name>
+		</location>
+		<location id="id5" x="-399" y="-212">
+			<name x="-416" y="-246">S_STARTING</name>
+		</location>
+		<location id="id6" x="17" y="-212">
+			<name x="7" y="-246">S_CRED_FWD</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id7">
+			<source ref="id6"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-59" y="-187">attacker_to_server_credential[target_id]!</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-212" y="-297">client_to_attacker_credential[target_id]?</label>
+			<label kind="assignment" x="-212" y="-280">intercepted_messages = 
+intercepted_messages + 1</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id5"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-433" y="-195">attacker_to_server_start[target_id]!</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id0"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-714" y="-263">attack_mode == MITM_ATTACK &amp;&amp;
+!active</label>
+			<label kind="synchronisation" x="-714" y="-229">client_to_attacker_start[target_id]?</label>
+			<label kind="assignment" x="-714" y="-212">active = true,
+intercepted_messages = 
+intercepted_messages + 1,
+mitm_active = true</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-712" y="-578">bootstrap_success[target_id]?</label>
+			<label kind="assignment" x="-712" y="-561">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="774" y="-561"/>
+			<nail x="-730" y="-561"/>
+		</transition>
+		<transition id="id12">
+			<source ref="id4"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-712" y="-493">bootstrap_success[target_id]?</label>
+			<label kind="assignment" x="-712" y="-476">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="468" y="-476"/>
+			<nail x="-730" y="-476"/>
+		</transition>
+		<transition id="id13">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-712" y="-416">bootstrap_success[target_id]?</label>
+			<label kind="assignment" x="-712" y="-399">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="204" y="-399"/>
+			<nail x="-730" y="-399"/>
+		</transition>
+		<transition id="id14">
+			<source ref="id2"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-713" y="-331">bootstrap_success[target_id]?</label>
+			<label kind="assignment" x="-713" y="-314">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="-195" y="-314"/>
+			<nail x="-731" y="-314"/>
+		</transition>
+		<transition id="id15">
+			<source ref="id4"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-712" y="42">bootstrap_error[target_id]?</label>
+			<label kind="assignment" x="-712" y="59">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="468" y="59"/>
+			<nail x="-730" y="59"/>
+		</transition>
+		<transition id="id16">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-712" y="-34">bootstrap_error[target_id]?</label>
+			<label kind="assignment" x="-712" y="-17">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="204" y="-17"/>
+			<nail x="-730" y="-17"/>
+		</transition>
+		<transition id="id17">
+			<source ref="id2"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-714" y="-119">bootstrap_error[target_id]?</label>
+			<label kind="assignment" x="-714" y="-102">active = false, 
+mitm_active = false, 
+intercepted_messages = 0</label>
+			<nail x="-195" y="-102"/>
+			<nail x="-731" y="-102"/>
+		</transition>
+		<transition id="id18">
+			<source ref="id4"/>
+			<target ref="id1"/>
+			<label kind="guard" x="408" y="-187">delay &gt;= DELAY_MAX</label>
+			<label kind="synchronisation" x="408" y="-170">attacker_to_client_config[target_id]!</label>
+			<label kind="assignment" x="408" y="-153">message_tampered[target_id] = true,
+tampered_config_value[target_id] = TAMPERED_CONFIG</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<label kind="guard" x="510" y="-323">delay &lt; DELAY_MAX</label>
+			<label kind="assignment" x="510" y="-306">delay = delay + 1</label>
+			<nail x="494" y="-297"/>
+			<nail x="536" y="-263"/>
+		</transition>
+		<transition id="id20">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="161" y="-280">server_to_attacker_config[target_id]?</label>
+			<label kind="assignment" x="161" y="-263">delay = 0</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-714" y="127">bootstrap_error[target_id]?</label>
+			<label kind="assignment" x="-714" y="144">active = false,
+mitm_active = false,
+intercepted_messages = 0</label>
+			<nail x="775" y="144"/>
+			<nail x="-730" y="144"/>
+		</transition>
+		<transition id="id22">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<nail x="-782" y="-246"/>
+			<nail x="-782" y="-178"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>int received_bs_type;</declaration>
+		<location id="id23" x="-1020" y="-204">
+			<name x="-1045" y="-255">S_INIT</name>
+		</location>
+		<location id="id24" x="-637" y="-204">
+			<name x="-731" y="-255">S_BOOTSTRAP_CREDENTIAL</name>
+		</location>
+		<location id="id25" x="153" y="-204">
+			<name x="143" y="-238">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id26" x="-93" y="229">
+			<name x="-103" y="195">S_ERROR</name>
+		</location>
+		<location id="id27" x="-365" y="-204">
+			<name x="-375" y="-238">S_WAITING_CONFIG</name>
+		</location>
+		<location id="id28" x="-93" y="-204">
+			<name x="-103" y="-238">S_VERIFY_CONFIG</name>
+			<committed/>
+		</location>
+		<location id="id29" x="-850" y="-493">
+			<name x="-860" y="-527">S_VERIFY_BS</name>
+			<committed/>
+		</location>
+		<init ref="id23"/>
+		<transition id="id30">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-347" y="-399">attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="-347" y="-382">fake_bs_config[id]?</label>
+			<label kind="assignment" x="-347" y="-365">received_config[id] = FAKE_CONFIG</label>
+			<nail x="-365" y="-365"/>
+			<nail x="-93" y="-365"/>
+		</transition>
+		<transition id="id31">
+			<source ref="id29"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-832" y="-527">client_bs_type[id] == 2</label>
+			<label kind="assignment" x="-832" y="-493">client_state[id] = CLIENT_STATE_ERROR</label>
+			<nail x="331" y="-493"/>
+			<nail x="331" y="229"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id29"/>
+			<target ref="id24"/>
+			<label kind="guard" x="-832" y="-382">client_bs_type[id] == 1</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id23"/>
+			<target ref="id29"/>
+			<label kind="guard" x="-1207" y="-493">attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="-1207" y="-467">fake_bs_start[id]?</label>
+			<label kind="assignment" x="-1207" y="-442">client_state[id] = CLIENT_STATE_BOOTSTRAPPING,
+client_bs_type[id] = 2</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id25"/>
+			<target ref="id25"/>
+			<nail x="229" y="-263"/>
+			<nail x="204" y="-297"/>
+		</transition>
+		<transition id="id35">
+			<source ref="id26"/>
+			<target ref="id26"/>
+			<nail x="-127" y="280"/>
+			<nail x="-59" y="280"/>
+		</transition>
+		<transition id="id36">
+			<source ref="id28"/>
+			<target ref="id26"/>
+			<label kind="guard" x="-93" y="-22">received_config[id] != NORMAL_CONFIG</label>
+			<label kind="synchronisation" x="-93" y="-5">bootstrap_error[id]!</label>
+			<label kind="assignment" x="-93" y="12">client_state[id] = CLIENT_STATE_ERROR,
+client_phase[id] = PHASE_ERROR</label>
+		</transition>
+		<transition id="id37">
+			<source ref="id28"/>
+			<target ref="id25"/>
+			<label kind="guard" x="-75" y="-238">received_config[id] == NORMAL_CONFIG</label>
+			<label kind="synchronisation" x="-75" y="-221">bootstrap_success[id]!</label>
+			<label kind="assignment" x="-75" y="-204">config_verified[id] = true,
+client_bootstrapped[id] = true,
+client_state[id] = CLIENT_STATE_BOOTSTRAP_COMPLETE,
+bootstrap_completed_count = bootstrap_completed_count + 1,
+client_phase[id] = PHASE_DONE</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-347" y="-76">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="-347" y="-59">attacker_to_client_config[id]?</label>
+			<label kind="assignment" x="-347" y="-42">received_config[id] = tampered_config_value[id],
+client_phase[id] = PHASE_VERIFY</label>
+			<nail x="-365" y="-42"/>
+			<nail x="-93" y="-42"/>
+		</transition>
+		<transition id="id39">
+			<source ref="id27"/>
+			<target ref="id28"/>
+			<label kind="guard" x="-348" y="-289">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="-347" y="-221">bootstrap_config[id]?</label>
+			<label kind="assignment" x="-347" y="-204">received_config[id] = NORMAL_CONFIG</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id24"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-619" y="-76">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="-619" y="-59">client_to_attacker_credential[id]!</label>
+			<label kind="assignment" x="-619" y="-42">client_phase[id] = PHASE_WAITING_CONFIG</label>
+			<nail x="-637" y="-42"/>
+			<nail x="-365" y="-42"/>
+		</transition>
+		<transition id="id41">
+			<source ref="id24"/>
+			<target ref="id27"/>
+			<label kind="guard" x="-646" y="-280">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="-619" y="-221">bootstrap_credential[id]!</label>
+			<label kind="assignment" x="-619" y="-204">credential_on_wire[id] = true</label>
+		</transition>
+		<transition id="id42">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="guard" x="-1002" y="-76">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="-1002" y="-59">client_to_attacker_start[id]!</label>
+			<label kind="assignment" x="-1002" y="-42">client_state[id] = CLIENT_STATE_BOOTSTRAPPING,
+client_phase[id] = PHASE_CREDENTIAL</label>
+			<nail x="-1020" y="-42"/>
+			<nail x="-637" y="-42"/>
+		</transition>
+		<transition id="id43">
+			<source ref="id23"/>
+			<target ref="id24"/>
+			<label kind="guard" x="-1020" y="-280">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="-1011" y="-221">bootstrap_start_client[id]?</label>
+			<label kind="assignment" x="-1011" y="-204">client_state[id] = CLIENT_STATE_BOOTSTRAPPING,
+client_bs_type[id] = 1</label>
+		</transition>
+		<transition id="id44">
+			<source ref="id23"/>
+			<target ref="id23"/>
+			<label kind="assignment" x="-1215" y="-374">client_state[id] = CLIENT_STATE_INIT,
+client_bootstrapped[id] = false,
+config_verified[id] = false</label>
+			<nail x="-1045" y="-306"/>
+			<nail x="-994" y="-306"/>
+		</transition>
+	</template>
+	<template>
+		<name>Attacker_FakeBS</name>
+		<declaration>int target = 0;</declaration>
+		<location id="id45" x="-1088" y="-646">
+			<name x="-1098" y="-680">S_IDLE</name>
+		</location>
+		<location id="id46" x="-680" y="-646">
+			<name x="-690" y="-680">S_SENDING_START</name>
+		</location>
+		<location id="id47" x="-331" y="-646">
+			<name x="-341" y="-680">S_SENDING_CONFIG</name>
+		</location>
+		<init ref="id45"/>
+		<transition id="id48">
+			<source ref="id45"/>
+			<target ref="id45"/>
+			<nail x="-1190" y="-705"/>
+			<nail x="-1190" y="-603"/>
+		</transition>
+		<transition id="id49">
+			<source ref="id47"/>
+			<target ref="id45"/>
+			<label kind="guard" x="-1070" y="-510">target &gt;= MAX_CLIENTS</label>
+			<nail x="-331" y="-476"/>
+			<nail x="-1088" y="-476"/>
+		</transition>
+		<transition id="id50">
+			<source ref="id47"/>
+			<target ref="id47"/>
+			<label kind="guard" x="-373" y="-799">target &lt; MAX_CLIENTS</label>
+			<label kind="synchronisation" x="-373" y="-782">fake_bs_config[target]!</label>
+			<label kind="assignment" x="-373" y="-765">target = target + 1</label>
+			<nail x="-391" y="-765"/>
+			<nail x="-272" y="-765"/>
+		</transition>
+		<transition id="id51">
+			<source ref="id46"/>
+			<target ref="id47"/>
+			<label kind="guard" x="-612" y="-663">target &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="-586" y="-646">target = 0</label>
+		</transition>
+		<transition id="id52">
+			<source ref="id46"/>
+			<target ref="id46"/>
+			<label kind="guard" x="-755" y="-752">target &lt; MAX_CLIENTS</label>
+			<label kind="synchronisation" x="-755" y="-735">fake_bs_start[target]!</label>
+			<label kind="assignment" x="-755" y="-718">target = target + 1</label>
+			<nail x="-773" y="-790"/>
+			<nail x="-586" y="-790"/>
+		</transition>
+		<transition id="id53">
+			<source ref="id45"/>
+			<target ref="id46"/>
+			<label kind="guard" x="-1071" y="-663">attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="assignment" x="-1070" y="-646">target = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>BootstrapHandler</name>
+		<declaration>int current_client = 0; 
+bool client_processed[MAX_CLIENTS];</declaration>
+		<location id="id54" x="-731" y="-323">
+			<name x="-741" y="-357">S_IDLE</name>
+		</location>
+		<location id="id55" x="-459" y="-323">
+			<name x="-469" y="-357">S_SELECTING</name>
+			<committed/>
+		</location>
+		<location id="id56" x="-51" y="-323">
+			<name x="-61" y="-357">S_SENDING_START</name>
+		</location>
+		<location id="id57" x="442" y="-323">
+			<name x="340" y="-425">S_WAITING_CREDENTIAL</name>
+		</location>
+		<location id="id58" x="841" y="-323">
+			<name x="831" y="-357">S_SENDING_CONFIG</name>
+		</location>
+		<location id="id59" x="841" y="153">
+			<name x="831" y="119">S_WAITING_COMPLETE</name>
+		</location>
+		<location id="id60" x="-459" y="-739">
+			<name x="-469" y="-773">S_ALL_COMPLETE</name>
+		</location>
+		<init ref="id54"/>
+		<transition id="id61">
+			<source ref="id60"/>
+			<target ref="id60"/>
+			<nail x="-510" y="-875"/>
+			<nail x="-408" y="-875"/>
+		</transition>
+		<transition id="id62">
+			<source ref="id59"/>
+			<target ref="id55"/>
+			<label kind="synchronisation" x="-441" y="314">bootstrap_error[current_client]?</label>
+			<label kind="assignment" x="-441" y="331">client_processed[current_client] = true,
+current_client = current_client + 1</label>
+			<nail x="841" y="331"/>
+			<nail x="-459" y="331"/>
+		</transition>
+		<transition id="id63">
+			<source ref="id58"/>
+			<target ref="id59"/>
+			<label kind="guard" x="901" y="-323">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="901" y="-306">server_to_attacker_config[current_client]!</label>
+			<nail x="1181" y="-323"/>
+			<nail x="1181" y="153"/>
+		</transition>
+		<transition id="id64">
+			<source ref="id59"/>
+			<target ref="id55"/>
+			<label kind="synchronisation" x="-441" y="136">bootstrap_success[current_client]?</label>
+			<label kind="assignment" x="-441" y="153">client_processed[current_client] = true,
+current_client = current_client + 1</label>
+			<nail x="-459" y="153"/>
+		</transition>
+		<transition id="id65">
+			<source ref="id58"/>
+			<target ref="id59"/>
+			<label kind="guard" x="688" y="-127">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="697" y="-68">bootstrap_config[current_client]!</label>
+		</transition>
+		<transition id="id66">
+			<source ref="id57"/>
+			<target ref="id58"/>
+			<label kind="guard" x="460" y="-204">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="460" y="-187">attacker_to_server_credential[current_client]?</label>
+			<nail x="442" y="-170"/>
+			<nail x="841" y="-170"/>
+		</transition>
+		<transition id="id67">
+			<source ref="id56"/>
+			<target ref="id57"/>
+			<label kind="guard" x="-33" y="-204">attack_mode == MITM_ATTACK</label>
+			<label kind="synchronisation" x="-33" y="-187">attacker_to_server_start[current_client]?</label>
+			<nail x="-51" y="-170"/>
+			<nail x="442" y="-170"/>
+		</transition>
+		<transition id="id68">
+			<source ref="id57"/>
+			<target ref="id58"/>
+			<label kind="guard" x="459" y="-399">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="460" y="-340">bootstrap_credential[current_client]?</label>
+		</transition>
+		<transition id="id69">
+			<source ref="id56"/>
+			<target ref="id57"/>
+			<label kind="guard" x="93" y="-408">attack_mode == NO_ATTACK 
+|| attack_mode == EAVESDROP_ATTACK
+|| attack_mode == FAKE_BS_ATTACK</label>
+			<label kind="synchronisation" x="76" y="-340">bootstrap_start_client[current_client]!</label>
+		</transition>
+		<transition id="id70">
+			<source ref="id55"/>
+			<target ref="id60"/>
+			<label kind="guard" x="-459" y="-565">current_client &gt;= MAX_CLIENTS</label>
+			<label kind="assignment" x="-459" y="-531">bootstrap_in_progress = false</label>
+		</transition>
+		<transition id="id71">
+			<source ref="id55"/>
+			<target ref="id56"/>
+			<label kind="guard" x="-357" y="-374">current_client &lt; MAX_CLIENTS &amp;&amp; 
+!client_processed[current_client]</label>
+		</transition>
+		<transition id="id72">
+			<source ref="id54"/>
+			<target ref="id55"/>
+			<label kind="assignment" x="-713" y="-323">bootstrap_in_progress = true,
+current_client = 0</label>
+		</transition>
+	</template>
+	<system>Client1 = Client(0);
+Client2 = Client(1);
+
+BootstrapHandler1 = BootstrapHandler();
+
+// 实例化攻击者（根据阶段选择性加入）
+// 第一阶段：MITM攻击者（每个客户端一个）
+Attacker_MITM0 = Attacker_MITM(0);
+Attacker_MITM1 = Attacker_MITM(1);
+
+// 第二阶段：窃听攻击者（可选）
+//Attacker_Eavesdrop1 = Attacker_Eavesdrop();
+
+// 第三阶段：伪造BS攻击者（可选）
+//Attacker_FakeBS1 = Attacker_FakeBS();
+
+system Client1, Client2, BootstrapHandler1,
+       Attacker_MITM0, Attacker_MITM1;
+
+//       Attacker_Eavesdrop1;
+//       Attacker_FakeBS1;</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt; attack_mode == NO_ATTACK and client_bootstrapped[0] and client_bootstrapped[1]</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-17 16:32:38 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 11:23:13 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// MITM PROPERTIES</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>E&lt;&gt; attack_mode == MITM_ATTACK and (message_tampered[0] or message_tampered[1])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:47 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == MITM_ATTACK and message_tampered[0] imply !client_bootstrapped[0])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:48 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == MITM_ATTACK and message_tampered[1] imply !client_bootstrapped[1])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:49 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (message_tampered[0] imply attack_mode == MITM_ATTACK)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:50 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (message_tampered[1] imply attack_mode == MITM_ATTACK)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:51 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; BootstrapHandler1.S_ALL_COMPLETE</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:39:53 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>// BS PROPERTIES</formula>
+			<comment/>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == FAKE_BS_ATTACK and client_bs_type[0] == 2 imply !client_bootstrapped[0])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 11:22:46 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == FAKE_BS_ATTACK and client_bs_type[1] == 2 imply !client_bootstrapped[1])</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 11:20:42 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == FAKE_BS_ATTACK and client_bs_type[0] == 2 and client_state[0] == CLIENT_STATE_ERROR)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:35:56 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; (attack_mode == FAKE_BS_ATTACK and client_bs_type[1] == 2 and client_state[1] == CLIENT_STATE_ERROR)
+</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-04-02 11:35:55 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == FAKE_BS_ATTACK and client_bootstrapped[0] imply client_bs_type[0] == 1)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 11:22:48 +0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (attack_mode == FAKE_BS_ATTACK and client_bootstrapped[1] imply client_bs_type[1] == 1)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-03-18 11:23:11 +0800">
+			</result>
+		</query>
+	</queries>
+</nta>

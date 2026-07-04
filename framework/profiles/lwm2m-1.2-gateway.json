@@ -1,0 +1,42 @@
+{
+  "profile_id": "lwm2m-1.2-gateway",
+  "lwm2m_version": "1.2",
+  "description": "Gateway-oriented industrial profile for checking routing, identity preservation, and freshness.",
+  "interfaces": ["bootstrap", "registration", "observation", "device_management"],
+  "transport": {
+    "binding": "mqtt",
+    "ack_timeout": 10000,
+    "max_retransmit": 4,
+    "retransmission_enabled": true
+  },
+  "security": {
+    "mode": "oscore",
+    "oscore_enabled": true,
+    "dtls_enabled": false,
+    "tls_enabled": true
+  },
+  "network": {
+    "loss_probability": 0.005
+  },
+  "attacker": {
+    "gateway_identity_confusion": true,
+    "replay": true,
+    "notification_tamper": true,
+    "dos": true
+  },
+  "deployment": {
+    "mes_count": 1,
+    "gateway_count": 1,
+    "client_count": 4,
+    "client_roles": ["plc", "temperature_sensor", "vibration_sensor", "actuator"],
+    "observation_deadline": 210000,
+    "stale_data_bound": 2,
+    "identity_preservation_required": true
+  },
+  "properties": [
+    "gateway_identity_preservation",
+    "fresh_observation",
+    "authorized_device_management",
+    "deadline_bounded_observation"
+  ]
+}

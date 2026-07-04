@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Registration SMC reliability model.
+
+const int MAX_CLIENTS = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 1;
+const int CLIENT_STATE_REGISTERING = 2;
+const int CLIENT_STATE_REGISTERED = 4;
+const int CLIENT_STATE_ERROR = 5;
+
+const bool DTLS_ENABLED = true;
+const int DTLS_DELAY = 50;
+const int REGISTRATION_DEADLINE = 21000;
+const int ACK_TIMEOUT = 2000;
+const int MAX_RETRANSMIT = 4;
+
+const int WEIGHT_REGISTER_SUCCESS = 995;
+const int WEIGHT_REGISTER_LOSS = 5;
+const int WEIGHT_OBJECT_SUCCESS = 995;
+const int WEIGHT_OBJECT_LOSS = 5;
+
+bool bootstrap_completed[MAX_CLIENTS];
+bool register_start_pending[MAX_CLIENTS];
+bool register_objects_pending[MAX_CLIENTS];
+bool register_ack_pending[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_failed[MAX_CLIENTS];
+int client_state[MAX_CLIENTS];
+int retransmission_count[MAX_CLIENTS];
+int register_loss_count[MAX_CLIENTS];
+int object_loss_count[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+</declaration>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>clock t;</declaration>
+		<location id="id0" x="-760" y="-280">
+			<name x="-770" y="-314">S_IDLE</name>
+			<label kind="exponentialrate" x="-770" y="-260">1</label>
+		</location>
+		<location id="id1" x="-460" y="-280">
+			<name x="-520" y="-314">S_DTLS_DELAY</name>
+			<label kind="invariant" x="-520" y="-260">t &lt;= DTLS_DELAY</label>
+		</location>
+		<location id="id2" x="-160" y="-280">
+			<name x="-220" y="-314">S_WAIT_OBJECTS</name>
+			<label kind="exponentialrate" x="-220" y="-260">1</label>
+		</location>
+		<location id="id3" x="140" y="-280">
+			<name x="80" y="-314">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<init ref="id0"/>
+		<transition id="id4">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-750" y="-340">register_start_pending[id] &amp;&amp; DTLS_ENABLED</label>
+			<label kind="assignment" x="-750" y="-320">register_start_pending[id] = false,
+t = 0</label>
+		</transition>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-750" y="-220">register_start_pending[id] &amp;&amp; !DTLS_ENABLED</label>
+			<label kind="assignment" x="-750" y="-200">register_start_pending[id] = false,
+t = 0</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-450" y="-340">t &gt;= DTLS_DELAY</label>
+			<label kind="assignment" x="-450" y="-320">t = 0</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-150" y="-340">register_objects_pending[id]</label>
+			<label kind="assignment" x="-150" y="-320">register_objects_pending[id] = false,
+server_last_msg_id[id] = client_message_id[id],
+t = 0</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="150" y="-320">register_ack_pending[id] = true,
+t = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<declaration>clock t;
+int retry = 0;</declaration>
+		<location id="id9" x="-760" y="180">
+			<name x="-770" y="146">S_BOOTSTRAP_DONE</name>
+			<label kind="invariant" x="-770" y="200">t &lt;= 0</label>
+		</location>
+		<location id="id10" x="-460" y="180">
+			<name x="-520" y="146">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id12" x="-20" y="180">
+			<name x="-80" y="146">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id14" x="420" y="180">
+			<name x="360" y="146">S_WAIT_ACK</name>
+			<label kind="invariant" x="360" y="200">t &lt;= ACK_TIMEOUT</label>
+		</location>
+		<location id="id15" x="720" y="80">
+			<name x="710" y="46">S_REGISTERED</name>
+			<label kind="invariant" x="710" y="100">t &lt;= REGISTRATION_DEADLINE</label>
+		</location>
+		<location id="id16" x="720" y="280">
+			<name x="710" y="246">S_ERROR</name>
+			<label kind="invariant" x="710" y="300">t &lt;= REGISTRATION_DEADLINE</label>
+		</location>
+		<branchpoint id="id11" x="-250" y="180"/>
+		<branchpoint id="id13" x="180" y="180"/>
+		<init ref="id9"/>
+		<transition id="id17">
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="assignment" x="-750" y="140">bootstrap_completed[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERING,
+client_message_id[id] = client_message_id[id] + 1,
+retry = 0,
+t = 0</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="-450" y="160">t = 0</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="assignment" x="-240" y="120">register_start_pending[id] = true</label>
+			<label kind="probability" x="-240" y="100">WEIGHT_REGISTER_SUCCESS</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id11"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="-240" y="240">register_loss_count[id] = register_loss_count[id] + 1,
+t = 0</label>
+			<label kind="probability" x="-240" y="220">WEIGHT_REGISTER_LOSS</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="assignment" x="-10" y="160">t = 0</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="190" y="120">register_objects_pending[id] = true,
+t = 0</label>
+			<label kind="probability" x="190" y="100">WEIGHT_OBJECT_SUCCESS</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="190" y="240">object_loss_count[id] = object_loss_count[id] + 1,
+t = 0</label>
+			<label kind="probability" x="190" y="220">WEIGHT_OBJECT_LOSS</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="guard" x="430" y="80">register_ack_pending[id]</label>
+			<label kind="assignment" x="430" y="100">register_ack_pending[id] = false,
+client_registered[id] = true,
+client_state[id] = CLIENT_STATE_REGISTERED,
+t = 0</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id14"/>
+			<target ref="id10"/>
+			<label kind="guard" x="430" y="260">t &gt;= ACK_TIMEOUT &amp;&amp; retry &lt; MAX_RETRANSMIT</label>
+			<label kind="assignment" x="430" y="280">retry = retry + 1,
+retransmission_count[id] = retransmission_count[id] + 1,
+client_message_id[id] = client_message_id[id] + 1,
+t = 0</label>
+			<nail x="420" y="340"/>
+			<nail x="-460" y="340"/>
+		</transition>
+		<transition id="id26">
+			<source ref="id14"/>
+			<target ref="id16"/>
+			<label kind="guard" x="610" y="260">t &gt;= ACK_TIMEOUT &amp;&amp; retry &gt;= MAX_RETRANSMIT</label>
+			<label kind="assignment" x="610" y="280">registration_failed[id] = true,
+client_state[id] = CLIENT_STATE_ERROR,
+t = 0</label>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+RegistrationServer0 = RegistrationServer(0);
+
+system Client0, RegistrationServer0;</system>
+	<queries>
+		<query>
+			<formula>Pr[&lt;=21000; 200] (&lt;&gt; client_registered[0])</formula>
+			<comment>Probability that a bootstrapped shopfloor device registers before the deadline.</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=21000; 200] (&lt;&gt; registration_failed[0])</formula>
+			<comment>Probability that registration fails after maximum retransmissions.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=21000; 200] (max: retransmission_count[0])</formula>
+			<comment>Expected maximum retransmission count.</comment>
+		</query>
+		<query>
+			<formula>E[&lt;=21000; 200] (max: register_loss_count[0] + object_loss_count[0])</formula>
+			<comment>Expected maximum lost registration messages.</comment>
+		</query>
+	</queries>
+</nta>

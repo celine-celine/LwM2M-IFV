@@ -1,0 +1,48 @@
+{
+  "profile_id": "lwm2m-1.2-shopfloor",
+  "lwm2m_version": "1.2",
+  "description": "Industrial shopfloor profile with OSCORE/DTLS security and stochastic packet loss.",
+  "interfaces": ["bootstrap", "registration", "observation"],
+  "transport": {
+    "binding": "coap_udp",
+    "ack_timeout": 10000,
+    "max_retransmit": 4,
+    "retransmission_enabled": true,
+    "backoff_policy": "coap_exponential"
+  },
+  "security": {
+    "mode": "oscore",
+    "oscore_enabled": true,
+    "dtls_enabled": true,
+    "encrypt_delay": 5,
+    "decrypt_delay": 5,
+    "handshake_delay": 100
+  },
+  "network": {
+    "loss_probability": 0.005
+  },
+  "attacker": {
+    "mitm": true,
+    "fake_bootstrap_server": true,
+    "eavesdrop": true,
+    "replay": true,
+    "notification_tamper": true,
+    "dos": true
+  },
+  "deployment": {
+    "mes_count": 1,
+    "gateway_count": 0,
+    "client_count": 2,
+    "client_roles": ["plc", "temperature_sensor"],
+    "observation_deadline": 210000,
+    "stale_data_bound": 2,
+    "command_authorization_required": true
+  },
+  "properties": [
+    "deadlock_freedom",
+    "attack_blocking",
+    "fresh_observation",
+    "deadline_bounded_observation",
+    "retransmission_reliability"
+  ]
+}

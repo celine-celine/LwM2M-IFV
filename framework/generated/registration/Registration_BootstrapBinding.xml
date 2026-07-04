@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Bootstrap-to-Registration security binding profile model.
+// The model links Bootstrap output to Registration admission:
+// a client may be registered and command-authorized only when the Registration
+// server identity and credential match the values provisioned during Bootstrap.
+
+const int MAX_CLIENTS = 1;
+typedef int[0, MAX_CLIENTS-1] client_id_t;
+
+const int CLIENT_STATE_INIT = 0;
+const int CLIENT_STATE_BOOTSTRAPPING = 1;
+const int CLIENT_STATE_BOOTSTRAP_COMPLETE = 2;
+const int CLIENT_STATE_REGISTERING = 3;
+const int CLIENT_STATE_REGISTERED = 4;
+const int CLIENT_STATE_ERROR = 5;
+
+const int AUTHORIZED_SERVER_ID = 10;
+const int ROGUE_SERVER_ID = 99;
+const int BOOTSTRAPPED_CREDENTIAL = 700;
+const int ROGUE_CREDENTIAL = 999;
+
+const bool BINDING_ENABLED = true;
+
+chan bootstrap_request[MAX_CLIENTS];
+chan bootstrap_config[MAX_CLIENTS];
+chan register_start[MAX_CLIENTS];
+chan register_objects[MAX_CLIENTS];
+chan register_ack[MAX_CLIENTS];
+chan register_reject[MAX_CLIENTS];
+
+bool client_bootstrapped[MAX_CLIENTS];
+bool config_verified[MAX_CLIENTS];
+bool client_registered[MAX_CLIENTS];
+bool registration_rejected[MAX_CLIENTS];
+bool object_list_received[MAX_CLIENTS];
+bool binding_violation[MAX_CLIENTS];
+bool binding_verified[MAX_CLIENTS];
+bool command_authorized[MAX_CLIENTS];
+bool rogue_registration_attempted[MAX_CLIENTS];
+bool rogue_registration_accepted[MAX_CLIENTS];
+int client_state[MAX_CLIENTS];
+int bootstrapped_server_id[MAX_CLIENTS];
+int registration_server_id[MAX_CLIENTS];
+int bootstrapped_credential[MAX_CLIENTS];
+int registration_credential[MAX_CLIENTS];
+int client_message_id[MAX_CLIENTS];
+int server_last_msg_id[MAX_CLIENTS];
+</declaration>
+	<template>
+		<name x="5" y="5">BootstrapServer</name>
+		<location id="id0" x="-760" y="-320">
+			<name x="-770" y="-354">S_WAIT_REQUEST</name>
+		</location>
+		<location id="id1" x="-460" y="-320">
+			<name x="-520" y="-354">S_SEND_CONFIG</name>
+			<committed/>
+		</location>
+		<location id="id2" x="-160" y="-320">
+			<name x="-220" y="-354">S_DONE</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id3">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="-750" y="-350">bootstrap_request[0]?</label>
+		</transition>
+		<transition id="id4">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-450" y="-350">bootstrap_config[0]!</label>
+		</transition>
+		<transition id="id5">
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<nail x="-220" y="-260"/>
+			<nail x="-100" y="-260"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id6" x="-281" y="-244">
+			<name x="-272" y="-272">S_INIT</name>
+		</location>
+		<location id="id7" x="-280" y="-85">
+			<name x="-272" y="-119">S_BOOTSTRAPPING</name>
+		</location>
+		<location id="id8" x="-283" y="102">
+			<name x="-272" y="68">S_VERIFY_CONFIG</name>
+			<committed/>
+		</location>
+		<location id="id9" x="20" y="100">
+			<name x="-40" y="66">S_BOOTSTRAP_DONE</name>
+		</location>
+		<location id="id10" x="275" y="0">
+			<name x="215" y="-34">S_SELECT_BOUND</name>
+			<committed/>
+		</location>
+		<location id="id11" x="275" y="200">
+			<name x="215" y="166">S_SELECT_ROGUE</name>
+			<committed/>
+		</location>
+		<location id="id12" x="529" y="100">
+			<name x="469" y="66">S_SEND_REGISTER</name>
+			<committed/>
+		</location>
+		<location id="id13" x="714" y="102">
+			<name x="654" y="68">S_SEND_OBJECTS</name>
+			<committed/>
+		</location>
+		<location id="id14" x="867" y="102">
+			<name x="817" y="68">S_WAIT_RESULT</name>
+		</location>
+		<location id="id15" x="1088" y="-17">
+			<name x="1037" y="8">S_REGISTERED</name>
+		</location>
+		<location id="id16" x="1088" y="212">
+			<name x="1037" y="170">S_REJECTED</name>
+		</location>
+		<init ref="id6"/>
+		<transition id="id17">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-272" y="-212">bootstrap_request[id]!</label>
+			<label kind="assignment" x="-272" y="-195">client_state[id] = 
+CLIENT_STATE_BOOTSTRAPPING</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id7"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="-272" y="-62">bootstrap_config[id]?</label>
+			<label kind="assignment" x="-272" y="-42">bootstrapped_server_id[id] = 
+AUTHORIZED_SERVER_ID,
+bootstrapped_credential[id] = 
+BOOTSTRAPPED_CREDENTIAL</label>
+		</transition>
+		<transition id="id19">
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="assignment" x="-272" y="102">config_verified[id] = true,
+client_bootstrapped[id] = true,
+client_state[id] = 
+CLIENT_STATE_BOOTSTRAP_COMPLETE</label>
+		</transition>
+		<transition id="id20">
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="0" y="-45">client_bootstrapped[id]</label>
+			<label kind="assignment" x="0" y="-25">registration_server_id[id] = 
+bootstrapped_server_id[id],
+registration_credential[id] = 
+bootstrapped_credential[id]</label>
+		</transition>
+		<transition id="id21">
+			<source ref="id9"/>
+			<target ref="id11"/>
+			<label kind="guard" x="8" y="133">client_bootstrapped[id]</label>
+			<label kind="assignment" x="8" y="153">registration_server_id[id] = 
+ROGUE_SERVER_ID,
+registration_credential[id] = 
+ROGUE_CREDENTIAL,
+rogue_registration_attempted[id] = 
+true</label>
+		</transition>
+		<transition id="id22">
+			<source ref="id10"/>
+			<target ref="id12"/>
+			<label kind="assignment" x="357" y="-25">client_state[id] = 
+CLIENT_STATE_REGISTERING,
+client_message_id[id] = 
+client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id23">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="assignment" x="357" y="153">client_state[id] = 
+CLIENT_STATE_REGISTERING,
+client_message_id[id] = 
+client_message_id[id] + 1</label>
+		</transition>
+		<transition id="id24">
+			<source ref="id12"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="527" y="110">register_start[id]!</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id13"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="714" y="110">register_objects[id]!</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id14"/>
+			<target ref="id15"/>
+			<label kind="synchronisation" x="825" y="-33">register_ack[id]?</label>
+			<label kind="assignment" x="825" y="-13">client_registered[id] = true,
+client_state[id] = 
+CLIENT_STATE_REGISTERED</label>
+		</transition>
+		<transition id="id27">
+			<source ref="id14"/>
+			<target ref="id16"/>
+			<label kind="synchronisation" x="833" y="170">register_reject[id]?</label>
+			<label kind="assignment" x="833" y="190">registration_rejected[id] = 
+true,
+client_state[id] = 
+CLIENT_STATE_ERROR</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id15"/>
+			<target ref="id15"/>
+			<nail x="1054" y="-78"/>
+			<nail x="1122" y="-78"/>
+		</transition>
+		<transition id="id29">
+			<source ref="id16"/>
+			<target ref="id16"/>
+			<nail x="1054" y="271"/>
+			<nail x="1122" y="271"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">RegistrationServer</name>
+		<parameter>const client_id_t id</parameter>
+		<location id="id30" x="-500" y="-620">
+			<name x="-560" y="-654">S_WAIT_REGISTER</name>
+		</location>
+		<location id="id31" x="-289" y="-620">
+			<name x="-349" y="-654">S_WAIT_OBJECTS</name>
+		</location>
+		<location id="id32" x="-25" y="-620">
+			<name x="-85" y="-654">S_VALIDATE</name>
+			<committed/>
+		</location>
+		<location id="id33" x="272" y="-718">
+			<name x="238" y="-756">S_SEND_ACK</name>
+			<committed/>
+		</location>
+		<location id="id34" x="272" y="-518">
+			<name x="221" y="-552">S_SEND_REJECT</name>
+			<committed/>
+		</location>
+		<location id="id35" x="552" y="-718">
+			<name x="512" y="-752">S_ACTIVE</name>
+		</location>
+		<location id="id36" x="552" y="-518">
+			<name x="512" y="-552">S_REJECTED</name>
+		</location>
+		<init ref="id30"/>
+		<transition id="id37">
+			<source ref="id30"/>
+			<target ref="id31"/>
+			<label kind="synchronisation" x="-484" y="-620">register_start[id]?</label>
+		</transition>
+		<transition id="id38">
+			<source ref="id31"/>
+			<target ref="id32"/>
+			<label kind="synchronisation" x="-272" y="-620">register_objects[id]?</label>
+			<label kind="assignment" x="-272" y="-600">object_list_received[id] = true</label>
+		</transition>
+		<transition id="id39">
+			<source ref="id32"/>
+			<target ref="id33"/>
+			<label kind="guard" x="-289" y="-765">!BINDING_ENABLED ||
+(registration_server_id[id] == bootstrapped_server_id[id] &amp;&amp;
+registration_credential[id] == bootstrapped_credential[id])</label>
+			<label kind="assignment" x="-289" y="-705">binding_verified[id] = true,
+server_last_msg_id[id] = client_message_id[id]</label>
+		</transition>
+		<transition id="id40">
+			<source ref="id32"/>
+			<target ref="id34"/>
+			<label kind="guard" x="-306" y="-561">BINDING_ENABLED &amp;&amp;
+(registration_server_id[id] != bootstrapped_server_id[id] ||
+registration_credential[id] != bootstrapped_credential[id])</label>
+			<label kind="assignment" x="-306" y="-501">binding_violation[id] = true</label>
+		</transition>
+		<transition id="id41">
+			<source ref="id33"/>
+			<target ref="id35"/>
+			<label kind="synchronisation" x="229" y="-687">register_ack[id]!</label>
+			<label kind="assignment" x="229" y="-667">command_authorized[id] = true,
+rogue_registration_accepted[id] =
+registration_server_id[id] != bootstrapped_server_id[id]</label>
+		</transition>
+		<transition id="id42">
+			<source ref="id34"/>
+			<target ref="id36"/>
+			<label kind="synchronisation" x="229" y="-487">register_reject[id]!</label>
+			<label kind="assignment" x="229" y="-467">command_authorized[id] = false</label>
+		</transition>
+		<transition id="id43">
+			<source ref="id35"/>
+			<target ref="id35"/>
+			<nail x="518" y="-779"/>
+			<nail x="586" y="-779"/>
+		</transition>
+		<transition id="id44">
+			<source ref="id36"/>
+			<target ref="id36"/>
+			<nail x="518" y="-459"/>
+			<nail x="586" y="-459"/>
+		</transition>
+	</template>
+	<system>Client0 = Client(0);
+BootstrapServer0 = BootstrapServer();
+RegistrationServer0 = RegistrationServer(0);
+
+system Client0, BootstrapServer0, RegistrationServer0;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom for Bootstrap-to-Registration binding.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.S_REGISTERED and binding_verified[0]</formula>
+			<comment>A correctly bound client can register.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; binding_violation[0] and registration_rejected[0]</formula>
+			<comment>A rogue registration server or credential mismatch is reachable and rejected.</comment>
+		</query>
+		<query>
+			<formula>A[] client_registered[0] imply registration_server_id[0] == bootstrapped_server_id[0]</formula>
+			<comment>A registered client must use the server identity provisioned during Bootstrap.</comment>
+		</query>
+		<query>
+			<formula>A[] client_registered[0] imply registration_credential[0] == bootstrapped_credential[0]</formula>
+			<comment>A registered client must use the credential provisioned during Bootstrap.</comment>
+		</query>
+		<query>
+			<formula>A[] command_authorized[0] imply client_registered[0] and binding_verified[0]</formula>
+			<comment>Industrial command authorization requires successful identity and credential binding.</comment>
+		</query>
+		<query>
+			<formula>A[] binding_violation[0] imply !rogue_registration_accepted[0]</formula>
+			<comment>A binding violation cannot be accepted as a rogue registration.</comment>
+		</query>
+	</queries>
+</nta>

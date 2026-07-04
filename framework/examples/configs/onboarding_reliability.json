@@ -1,0 +1,98 @@
+{
+  "requirement_id": "onboarding_reliability_demo",
+  "source_text": "Estimate the onboarding reliability of a shop-floor LwM2M endpoint when DTLS or OSCORE security overhead, low LAN packet loss, timeout, and retransmission are enabled for bootstrap and registration.",
+  "analysis": {
+    "mode": "quantitative_reliability",
+    "intent": "onboarding_reliability"
+  },
+  "scenario": {
+    "domain": "shop_floor_lwm2m",
+    "devices": [
+      {
+        "id": "client_0",
+        "role": "new_shop_floor_endpoint"
+      }
+    ],
+    "network": "low_loss_industrial_lan"
+  },
+  "coverage_status": "fully_supported",
+  "supported_requirements": [
+    "Estimate bootstrap onboarding reliability.",
+    "Estimate registration admission reliability.",
+    "Include bounded security overhead, low LAN loss, timeout, and retransmission."
+  ],
+  "unsupported_requirements": [],
+  "clarification_questions": [],
+  "assumptions": [
+    "DTLS or OSCORE overhead is represented by the bounded security_overhead_profile parameter.",
+    "Low LAN packet loss is represented by the predefined shop_floor_lan_low_loss profile."
+  ],
+  "profile_instances": [
+    {
+      "template": "onboarding_reliability_template",
+      "profile": "bootstrap-smc",
+      "queries": [
+        "bootstrap_success_probability",
+        "bootstrap_failure_probability",
+        "expected_retransmission_count",
+        "expected_config_loss_count"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "max_retransmit": 4
+      }
+    },
+    {
+      "template": "onboarding_reliability_template",
+      "profile": "registration-smc",
+      "queries": [
+        "registration_success_probability",
+        "registration_failure_probability",
+        "expected_retransmission_count",
+        "expected_lost_registration_messages"
+      ],
+      "parameters": {
+        "security_overhead_profile": "dtls_or_oscore_bounded",
+        "network_loss_profile": "shop_floor_lan_low_loss",
+        "max_retransmit": 4
+      }
+    }
+  ],
+  "selected_profiles": [
+    "bootstrap-smc",
+    "registration-smc"
+  ],
+  "query_selection": [
+    {
+      "profile": "bootstrap-smc",
+      "queries": [
+        "bootstrap_success_probability",
+        "bootstrap_failure_probability",
+        "expected_retransmission_count",
+        "expected_config_loss_count"
+      ]
+    },
+    {
+      "profile": "registration-smc",
+      "queries": [
+        "registration_success_probability",
+        "registration_failure_probability",
+        "expected_retransmission_count",
+        "expected_lost_registration_messages"
+      ]
+    }
+  ],
+  "parameters": {
+    "security_overhead_profile": "dtls_or_oscore_bounded",
+    "network_loss_profile": "shop_floor_lan_low_loss",
+    "ack_timeout": 2000,
+    "max_retransmit": 4,
+    "registration_update_enabled": true,
+    "lifetime_expiration_enabled": true
+  },
+  "assistant_notes": [
+    "The bootstrap SMC profile estimates provisioning reliability under security overhead and message loss.",
+    "The registration SMC profile estimates admission reliability under bounded retransmission and deadline settings."
+  ]
+}
