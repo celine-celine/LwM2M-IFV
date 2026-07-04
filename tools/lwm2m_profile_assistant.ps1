@@ -128,6 +128,17 @@ function ConvertTo-NullableDouble {
     return [double]::Parse($Value, [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+function ConvertTo-AsciiReportText {
+    param([string]$Text)
+    if ($null -eq $Text) {
+        return $null
+    }
+    return $Text.
+        Replace([string][char]0x00B1, "+/-").
+        Replace([string][char]0x5364, "+/-").
+        Replace([string][char]0x2248, "~")
+}
+
 function ConvertTo-BooleanValue {
     param($Value)
     if ($Value -is [bool]) {
@@ -161,7 +172,7 @@ function ConvertTo-SafeId {
 function Get-SmcResult {
     param([Parameter(Mandatory = $true)][string]$OutputText)
 
-    $cleanText = $OutputText -replace "`e\[[0-9;]*[A-Za-z]", ""
+    $cleanText = (ConvertTo-AsciiReportText -Text $OutputText) -replace "`e\[[0-9;]*[A-Za-z]", ""
     $lines = @($cleanText -split "`r?`n")
 
     $result = [ordered]@{}
@@ -188,7 +199,7 @@ function Get-SmcResult {
             continue
         }
 
-        $expectationMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+([0-9.eE+-]+)\s+(?:±|\+/-)\s+([0-9.eE+-]+)\s+\((\d+(?:\.\d+)?)%\s+CI\)')
+        $expectationMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+([0-9.eE+-]+)\s+\+/-\s+([0-9.eE+-]+)\s+\((\d+(?:\.\d+)?)%\s+CI\)')
         if ($expectationMatch.Success) {
             $result.type = "expectation"
             $result.runs = [int]$expectationMatch.Groups[1].Value
@@ -199,7 +210,7 @@ function Get-SmcResult {
             continue
         }
 
-        $nearZeroMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+≈\s+0')
+        $nearZeroMatch = [regex]::Match($trimmed, '^\((\d+)\s+runs\)\s+E\(([^)]+)\)\s+=\s+(?:~|<=|<)?\s*0')
         if ($nearZeroMatch.Success) {
             $result.type = "expectation"
             $result.runs = [int]$nearZeroMatch.Groups[1].Value
@@ -924,7 +935,7 @@ function Invoke-ProfileQuery {
     $outputLines = & powershell @arguments 2>&1
     $exitCode = $LASTEXITCODE
     $finished = Get-Date
-    $outputText = ($outputLines | Out-String).Trim()
+    $outputText = ConvertTo-AsciiReportText -Text (($outputLines | Out-String).Trim())
 
     $status = "UNKNOWN"
     if ($exitCode -ne 0) {
@@ -939,7 +950,7 @@ function Invoke-ProfileQuery {
         $status = "COMPLETED"
     }
 
-    $tail = @($outputLines | Select-Object -Last 12)
+    $tail = @($outputLines | Select-Object -Last 12 | ForEach-Object { ConvertTo-AsciiReportText -Text ([string]$_) })
     $smcResult = Get-SmcResult -OutputText $outputText
 
     return [pscustomobject][ordered]@{
